@@ -218,3 +218,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- TrustShield AI ---
+# The generic Python `lib/` rule above must not swallow the frontend's source folder.
+!frontend/src/lib/
+node_modules/
+.next/
+frontend/test-results/
+frontend/playwright-report/
+backend/.venv/
+backend/data/
+reports/*.json
+*.db

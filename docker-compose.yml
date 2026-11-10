@@ -1,0 +1,58 @@
+name: trustshield
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trustshield}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trustshield}
+      POSTGRES_DB: ${POSTGRES_DB:-trustshield}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"   # host 5433 avoids clashing with a local Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trustshield} -d ${POSTGRES_DB:-trustshield}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trustshield}:${POSTGRES_PASSWORD:-trustshield}@db:5432/${POSTGRES_DB:-trustshield}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      SEED_ON_START: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:8000
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
