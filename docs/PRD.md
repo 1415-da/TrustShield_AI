@@ -62,7 +62,7 @@ Point solutions (DLP proxies, prompt firewalls, eval tools) each cover one slice
 - Policy Studio: CRUD, rule builder, versioning, activate/deactivate, simulator.
 - Admin console: overview analytics, documents, users & role permissions, connected apps & API keys, audit log, test center, settings.
 - Tamper-evident audit log (hash-chained, DB-enforced append-only).
-- Evaluation harness with 45 seeded test cases and FP/FN reporting.
+- Evaluation harness with 49 seeded test cases and FP/FN reporting.
 - Docker Compose deployment, seed data, backend + Playwright tests.
 
 ## 6. Explicit non-goals

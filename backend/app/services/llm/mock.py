@@ -54,7 +54,7 @@ class MockProvider(LLMProvider):
             )
 
         q_terms = [t for t in dict.fromkeys(content_terms(prompt)) if t not in GENERIC_QUERY_TERMS]
-        vocab = set(content_terms(" ".join(b[2] for b in policy_blocks)))
+        vocab = set(content_terms(" ".join(f"{b[1]} {b[2]}" for b in policy_blocks)))
         missing = [t for t in q_terms if t not in vocab]
 
         scored: list[tuple[float, int, str]] = []

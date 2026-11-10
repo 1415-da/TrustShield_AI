@@ -39,7 +39,7 @@ Next.js 14 · FastAPI · PostgreSQL 15 · Presidio · OpenAI-compatible provider
 
 ### Measured, not claimed
 
-The built-in Test Center runs 45 labelled scenarios (safe questions, salary access by role, card/bank requests, prompt injection, indirect injection, low-confidence answers, output leaks) and reports pass rate, false positives, and false negatives. All metrics shown in the product are computed from the seeded synthetic demo — there are no production performance claims.
+The built-in Test Center runs 49 labelled scenarios (safe questions, salary access by role, card/bank requests, prompt injection, indirect injection, low-confidence answers, output leaks) and reports pass rate, false positives, and false negatives. All metrics shown in the product are computed from the seeded synthetic demo — there are no production performance claims.
 
 ### Trade-offs we chose deliberately
 

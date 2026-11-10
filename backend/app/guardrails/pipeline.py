@@ -141,16 +141,23 @@ class GuardrailEngine:
         """Scan retrieved chunks for indirect prompt injection or other rule hits; quarantine offenders."""
         t0 = time.perf_counter()
         kept, quarantined, matches = [], [], []
+        redactions = 0
         for item in items:
             analysis = self.analyze(item.text)
             hits = evaluate_policies(self.policies, self._ctx(actor, "retrieved_context", analysis), "retrieved_context")
-            if hits:
-                for h in hits:
-                    h.evidence = f"source [{item.index}] '{item.title}': {h.evidence}"
-                matches.extend(hits)
-                quarantined.append(item)
-            else:
+            for h in hits:
+                h.evidence = f"source [{item.index}] '{item.title}': {h.evidence}"
+            matches.extend(hits)
+            if not hits:
                 kept.append(item)
+            elif all(h.action == "REDACT" for h in hits):
+                # Sensitive values inside a knowledge source are masked before the model sees them.
+                masked_text, masked = _mask_entities(self.pii, item.text, analysis.entities, _redaction_types(hits, self.policies))
+                item.text = masked_text
+                redactions += len(masked)
+                kept.append(item)
+            else:
+                quarantined.append(item)
         # Re-number kept items so citations stay contiguous.
         for i, item in enumerate(kept, start=1):
             item.index = i
@@ -161,7 +168,8 @@ class GuardrailEngine:
             risk_score=aggregate_risk(matches),
             matches=matches,
             signals={"retrieved": len(items), "quarantined": len(quarantined),
-                     "quarantined_sources": [q.title for q in quarantined]},
+                     "quarantined_sources": [q.title for q in quarantined], "masked_values": redactions},
+            redaction_count=redactions,
             latency_ms=round((time.perf_counter() - t0) * 1000, 2),
         )
         return ContextOutcome(stage=stage, kept=kept, quarantined=quarantined)
@@ -180,7 +188,8 @@ class GuardrailEngine:
     ) -> OutputOutcome:
         t0 = time.perf_counter()
         retrieval_sim = max((c.score for c in context), default=0.0)
-        grounding = assess_grounding(query, draft, [c.text for c in context], retrieval_sim, input_risk)
+        evidence = [f"{c.title} {c.heading}\n{c.text}" for c in context]
+        grounding = assess_grounding(query, draft, evidence, retrieval_sim, input_risk)
         analysis = self.analyze(draft, confidence=grounding.confidence)
         matches = evaluate_policies(self.policies, self._ctx(actor, "llm_output", analysis), "llm_output")
 

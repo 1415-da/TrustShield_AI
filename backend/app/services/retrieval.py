@@ -21,6 +21,7 @@ from app.models import Document, DocumentChunk
 from app.services.embeddings import get_embedder
 
 W_COS, W_BM25, MIN_SCORE = 0.55, 0.45, 0.12
+RELATIVE_CUTOFF = 0.5  # drop chunks scoring below half of the best match
 K1, B = 1.4, 0.75
 
 
@@ -105,4 +106,7 @@ def search(db: Session, query: str, top_k: int | None = None) -> list[RetrievedC
         if score >= MIN_SCORE:
             results.append(RetrievedChunk(c, round(score, 4), round(cos, 4), round(bm25, 3)))
     results.sort(key=lambda r: -r.score)
+    if results:
+        floor = results[0].score * RELATIVE_CUTOFF
+        results = [r for r in results if r.score >= floor]
     return results[:top_k]

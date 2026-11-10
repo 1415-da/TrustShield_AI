@@ -17,6 +17,9 @@ from app.models.base import utcnow
 from app.services import audit, gateway
 
 OPEN_STATUSES = ("PENDING", "ESCALATED")
+
+# Overridable clock so the seed script can back-date review history; production uses wall time.
+clock = utcnow
 PRIORITY_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
 
 
@@ -69,25 +72,25 @@ def _deliver(db: Session, c: ReviewCase, text: str, trust_status: str, decision:
         "headline": {"approved": "Reviewed and approved by NovaCorp compliance",
                      "edited": "Reviewed and edited by NovaCorp compliance",
                      "rejected": "Reviewed by NovaCorp compliance — not approved"}[decision],
-        "reviewed": {"decision": decision, "at": utcnow().isoformat() + "Z"},
+        "reviewed": {"decision": decision, "at": clock().isoformat() + "Z"},
         "warning": None,
     })
     msg.explanation = explanation
-    msg.updated_at = utcnow()
+    msg.updated_at = clock()
 
 
 def _act(db: Session, c: ReviewCase, reviewer: User, action: str, note: str, edited: str | None = None) -> None:
     db.add(ReviewAction(case_id=c.id, reviewer_id=reviewer.id, reviewer_email=reviewer.email, action=action,
-                        note=note or "", edited_response=edited))
+                        note=note or "", edited_response=edited, created_at=clock()))
     audit.record(
-        db, f"review.{action.lower()}", **audit.actor_fields(reviewer), request_id=c.request_id, review_case_id=c.id,
+        db, f"review.{action.lower()}", created_at=clock(), **audit.actor_fields(reviewer), request_id=c.request_id, review_case_id=c.id,
         policy_ids=sorted({m["policy_id"] for m in c.policy_matches or []}), final_action=action,
         details={"status": c.status, "priority": c.priority, "note": (note or "")[:500]},
     )
 
 
 def _resolve(c: ReviewCase, reviewer: User, status: str, final: str) -> None:
-    c.status, c.final_response, c.resolved_by, c.resolved_at = status, final, reviewer.id, utcnow()
+    c.status, c.final_response, c.resolved_by, c.resolved_at = status, final, reviewer.id, clock()
 
 
 def approve(db: Session, c: ReviewCase, reviewer: User, note: str = "") -> ReviewCase:
@@ -108,6 +111,7 @@ def approve(db: Session, c: ReviewCase, reviewer: User, note: str = "") -> Revie
     _deliver(db, c, text, trust, "approved", citations)
     _act(db, c, reviewer, "APPROVE", note)
     db.commit()
+    db.refresh(c)
     return c
 
 
@@ -123,6 +127,7 @@ def edit(db: Session, c: ReviewCase, reviewer: User, edited_response: str, note:
     _deliver(db, c, safe, "redacted" if ents else "verified", "edited")
     _act(db, c, reviewer, "EDIT", note + (f" [{len(ents)} sensitive value(s) auto-masked]" if ents else ""), edited=safe)
     db.commit()
+    db.refresh(c)
     return c
 
 
@@ -132,15 +137,17 @@ def reject(db: Session, c: ReviewCase, reviewer: User, note: str = "") -> Review
     _deliver(db, c, gateway.FALLBACK_REJECTED, "blocked", "rejected", citations=[])
     _act(db, c, reviewer, "REJECT", note)
     db.commit()
+    db.refresh(c)
     return c
 
 
 def escalate(db: Session, c: ReviewCase, reviewer: User, note: str = "") -> ReviewCase:
     _require_open(c)
     c.status, c.priority = "ESCALATED", "CRITICAL"
-    c.sla_due_at = utcnow() + timedelta(hours=SLA_HOURS["CRITICAL"])
+    c.sla_due_at = clock() + timedelta(hours=SLA_HOURS["CRITICAL"])
     _act(db, c, reviewer, "ESCALATE", note)
     db.commit()
+    db.refresh(c)
     return c
 
 
@@ -149,4 +156,5 @@ def add_note(db: Session, c: ReviewCase, reviewer: User, note: str) -> ReviewCas
         raise BadRequest("Note cannot be empty")
     _act(db, c, reviewer, "NOTE", note)
     db.commit()
+    db.refresh(c)
     return c

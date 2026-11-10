@@ -22,7 +22,7 @@ def make_engine(url: str) -> Engine:
         return create_engine(
             url,
             connect_args={"check_same_thread": False},
-            poolclass=StaticPool if ":memory:" in url else None,
+            poolclass=StaticPool if url in ("sqlite://", "sqlite:///") or ":memory:" in url else None,
         )
     return create_engine(url, pool_pre_ping=True, pool_size=10, max_overflow=10)
 

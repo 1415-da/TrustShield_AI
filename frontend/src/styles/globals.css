@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  html {
+    @apply bg-cream text-ink antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  body {
+    @apply bg-cream font-sans text-[15px] leading-relaxed text-ink;
+  }
+  h1, h2, h3, h4 {
+    @apply font-serif font-medium tracking-[-0.01em] text-ink;
+  }
+  ::selection {
+    @apply bg-lilac text-ink;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-forest ring-offset-2 ring-offset-cream;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500;
+  }
+  .panel {
+    @apply rounded-2xl border border-hair bg-cream-50/80;
+  }
+  .hairline {
+    @apply border-hair;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  .link {
+    @apply text-forest underline decoration-forest/30 underline-offset-4 transition hover:decoration-forest;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(26, 26, 26, 0.15) transparent;
+  }
+}

@@ -6,6 +6,8 @@ if its expectations imply the employee should not simply receive an answer.
 
     false positive  — a safe case that TrustShield restricted (blocked, escalated, or sent to review)
     false negative  — a restrictive case that TrustShield let through as a normal answer
+
+Cases whose expectations accept either outcome (e.g. "review or warning") are excluded from FP/FN.
 """
 
 from __future__ import annotations
@@ -29,10 +31,23 @@ def actor_for_role(db: Session, role_key: str) -> Actor:
     return Actor(user_id=None, email=f"simulated+{role_key}@novacorp.test", roles={role_key}, permissions=perms, primary_role=role_key)
 
 
+SAFE_OUTPUT = {"SHOW", "SHOW_WITH_WARNING"}
+
+
+def expected_class(tc: TestCase) -> str:
+    """'restrictive', 'safe', or 'either' (expectations accept both outcomes; excluded from FP/FN)."""
+    inp, out = set(tc.expected_input_actions), set(tc.expected_output_actions)
+    if inp and inp <= RESTRICTIVE_INPUT:
+        return "restrictive"
+    if out and out <= RESTRICTIVE_OUTPUT:
+        return "restrictive"
+    if inp == {"ALLOW"} and out <= SAFE_OUTPUT:
+        return "safe"
+    return "either"
+
+
 def expected_restrictive(tc: TestCase) -> bool:
-    if any(a in RESTRICTIVE_INPUT for a in tc.expected_input_actions) and "ALLOW" not in tc.expected_input_actions:
-        return True
-    return bool(tc.expected_output_actions) and all(a in RESTRICTIVE_OUTPUT for a in tc.expected_output_actions)
+    return expected_class(tc) == "restrictive"
 
 
 def run_case(db: Session, tc: TestCase) -> dict:
@@ -41,7 +56,7 @@ def run_case(db: Session, tc: TestCase) -> dict:
     out_val = r.output_action.value if r.output_action else None
     out_ok = not tc.expected_output_actions or (out_val in tc.expected_output_actions)
     passed = in_ok and out_ok
-    restrictive_expected = expected_restrictive(tc)
+    klass = expected_class(tc)
     actually_restricted = r.trust_status in HARD_STOP_STATUSES or r.trust_status == "redacted"
     reason = ""
     if not in_ok:
@@ -56,8 +71,8 @@ def run_case(db: Session, tc: TestCase) -> dict:
         "matched_policies": sorted({m.policy_name for m in r.all_matches}),
         "confidence": r.grounding.confidence if r.grounding else None,
         "latency_ms": r.latency_ms,
-        "false_positive": (not restrictive_expected) and r.trust_status in HARD_STOP_STATUSES,
-        "false_negative": restrictive_expected and not actually_restricted,
+        "false_positive": klass == "safe" and r.trust_status in HARD_STOP_STATUSES,
+        "false_negative": klass == "restrictive" and not actually_restricted,
         "failure_reason": reason,
     }
 
@@ -80,13 +95,13 @@ def execute_run(db: Session, run: TestRun, case_ids: list[int] | None = None) ->
         run.failed = run.total - run.passed
         run.false_positives = sum(1 for r in run.results if r.false_positive)
         run.false_negatives = sum(1 for r in run.results if r.false_negative)
-        safe = sum(1 for tc in cases if not expected_restrictive(tc))
-        risky = run.total - safe
+        classes = [expected_class(tc) for tc in cases]
+        safe, risky = classes.count("safe"), classes.count("restrictive")
         run.summary = {
             "pass_rate": round(run.passed / run.total, 3) if run.total else 0.0,
             "false_positive_rate": round(run.false_positives / safe, 3) if safe else 0.0,
             "false_negative_rate": round(run.false_negatives / risky, 3) if risky else 0.0,
-            "safe_cases": safe, "restrictive_cases": risky, "by_category": by_category,
+            "safe_cases": safe, "restrictive_cases": risky, "either_cases": classes.count("either"), "by_category": by_category,
             "avg_latency_ms": round(sum(r.latency_ms for r in run.results) / run.total, 1) if run.total else 0.0,
         }
         run.status = "completed"

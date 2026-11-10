@@ -20,23 +20,30 @@ STOPWORDS = frozenset(
 # Words too generic to say whether a question is covered by evidence.
 GENERIC_QUERY_TERMS = frozenset(
     "novacorp policy policies company employee employees rule rules guideline guidelines process procedure need know "
-    "summarize summarise explain describe question answer help much many like want say says said work".split()
+    "summarize summarise explain describe question answer help much many like want say says said work "
+    # question modifiers that shape *how* to answer, not *what* the question is about
+    "minimum maximum length long often limit limits amount number details information query contact "
+    "allowed exactly specific typical usual current latest new".split()
 )
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+(?:'[a-z]+)?")
+_PLACEHOLDER_RE = re.compile(r"<[A-Z_]+>")
 
 
 def stem(token: str) -> str:
     """Very light suffix stripping — enough to match refund/refunds/refunded."""
-    for suffix in ("ations", "ation", "ments", "ment", "ings", "ing", "ies", "ied", "ers", "er", "es", "ed", "s"):
+    for suffix in ("ality", "ity", "ations", "ation", "ments", "ment", "ings", "ing", "ies", "ied", "ers", "er", "es", "ed", "s"):
         if token.endswith(suffix) and len(token) - len(suffix) >= 3:
             base = token[: -len(suffix)]
+            if suffix == "ality":
+                return base + "al"
             return base + "y" if suffix in ("ies", "ied") else base
     return token
 
 
 def tokenize(text: str) -> list[str]:
-    return [t.replace("'s", "") for t in _TOKEN_RE.findall(text.lower())]
+    # Masked placeholders such as <BANK_ACCOUNT> carry no meaning for retrieval or grounding.
+    return [t.replace("'s", "") for t in _TOKEN_RE.findall(_PLACEHOLDER_RE.sub(" ", text).lower())]
 
 
 def content_terms(text: str) -> list[str]:

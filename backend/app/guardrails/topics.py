@@ -74,6 +74,7 @@ META_PATTERNS = [
     r"\bpolic(y|ies)\b", r"\bprocess\b", r"\bprocedure\b", r"\bhow (do|can|should) i\b", r"\bhow to\b",
     r"\bwho (can|approves|should)\b", r"\bguidelines?\b", r"\bconfidential(ity)?\b", r"\breset\b",
     r"\bupdate my\b", r"\bchange my\b", r"\bwhen (is|are|do|does)\b", r"\breimburse",
+    r"\b(minimum|maximum|length|requirements?|complexity|rotation|expiry|how often)\b",
 ]
 SELF_PATTERNS = [r"\b(my|mine|i|i'm|i've|me)\b"]
 SYSTEM_PATTERNS = [

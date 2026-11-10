@@ -1,5 +1,5 @@
 # Build context is the repository root (so the seed script is available).
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

@@ -32,7 +32,9 @@ The browser only ever calls `/api/*` on its own origin. `next.config.js` rewrite
                  → input action: ALLOW | REDACT | BLOCK | REVIEW | ESCALATE
 3. Short-circuit BLOCK / ESCALATE → no retrieval, no LLM call. Explanation returned.
 4. Retrieval     sanitized prompt → hybrid search (embedding cosine + BM25) → top-5 chunks
-                 each chunk scanned (match_field = retrieved_context) → injected chunks quarantined
+                 each chunk scanned (match_field = retrieved_context):
+                   REDACT rules mask values in the chunk (e.g. a card number in a wiki page)
+                   any other hit quarantines the chunk (e.g. injected instructions)
 5. Generation    LLMProvider.generate(prompt, context) — mock | openai | azure
 6. Output stage  ┌ PII / sensitive-number leak detection on the draft
                  ├ grounding signals (semantic, lexical, citations, evidence coverage, contradictions)
@@ -67,6 +69,8 @@ Invariant: step 5 is unreachable when step 3 short-circuits. This is asserted in
 | `app/services/audit.py` | Append-only, hash-chained audit writer and verifier |
 | `app/services/policies.py` | CRUD with automatic version snapshots |
 | `app/services/evaluation.py` | Test harness runner and FP/FN scoring |
+| `app/services/simulation.py` | Dry-run simulator, including inactive or unsaved draft policies |
+| `app/seed/` | Synthetic NovaCorp data (users, directory, policies, documents, 49 test cases) |
 | `app/workers/tasks.py` | FastAPI background tasks (reindex, test runs) |
 
 ## 4. Data model
@@ -94,6 +98,8 @@ employee_records (synthetic directory: names, titles, salary bands, test IDs)
 | `role_permission` | `required_permission`, plus `topic` or `entity_types` | the condition holds **and** the user lacks the permission scope |
 | `confidence_threshold` | `threshold` | grounding confidence < threshold (output only) |
 
+A baseline also applies regardless of policy: card numbers, bank numbers, government-style IDs, emails, phone numbers and inline credentials are always masked before a prompt leaves the gateway or a message is stored.
+
 Each rule has `match_field` (`user_input` / `llm_output` / `retrieved_context`), `action`, `severity`, `applies_to_roles` (empty = all), and `is_active`. On the output side, a triggered `ALLOW` rule means "allowed, but flag it" → `SHOW_WITH_WARNING`.
 
 ## 5. Retrieval and grounding
@@ -101,8 +107,8 @@ Each rule has `match_field` (`user_input` / `llm_output` / `retrieved_context`),
 - **Chunking:** paragraph-aware, ~700 characters with one-paragraph overlap; headings kept with their body.
 - **Embeddings:** `EMBEDDING_PROVIDER=local` uses a deterministic hashed unigram+bigram vector (768-d, L2-normalised) — zero downloads, works offline. `sentence-transformers` and `openai` are optional providers behind the same interface.
 - **Vector storage:** embeddings are stored as JSON on `document_chunks` and scored in-process. At MVP corpus sizes (hundreds of chunks) this is faster than a network round-trip. pgvector is on the roadmap; the interface is ready for it.
-- **Ranking:** `0.55 × cosine + 0.45 × normalised BM25`, top-5.
-- **Groundedness (risk signal):** `0.35 semantic + 0.25 lexical support + 0.15 citation presence + 0.25 query-term support − contradiction penalty`. Contradiction signals: numbers in the answer absent from evidence, hedging language, explicit "no policy found" statements.
+- **Ranking:** `0.55 × cosine + 0.45 × saturated BM25`; chunks below half the best score are dropped; top-5.
+- **Groundedness (risk signal):** `0.30 semantic + 0.20 lexical support + 0.15 citation presence + 0.15 evidence coverage + 0.20 query-term support − contradiction penalty`. Contradiction signals: numbers in the answer absent from evidence, hedging language, explicit "no policy found" statements. Masked placeholders and generic question modifiers ("minimum", "how long") are ignored.
 - **Confidence (risk signal):** `0.6 groundedness + 0.2 retrieval similarity + 0.1 length sanity + 0.1 (1 − input risk)`.
 
 These are heuristics. The product labels them as risk signals and routes low scores to humans rather than claiming to detect hallucinations.

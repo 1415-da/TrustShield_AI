@@ -18,7 +18,7 @@ from app.guardrails.pii import get_pii_detector
 from app.models import ApiKey, ConnectedApp, Role, User
 from app.models.base import utcnow
 from app.schemas.auth import UserOut
-from app.schemas.misc import ApiKeyCreate, ApiKeyCreated, AppCreate, AppOut, AppUpdate, RoleOut, RoleUpdate, UserUpdate
+from app.schemas.misc import ApiKeyCreate, ApiKeyCreated, ApiKeyOut, AppCreate, AppOut, AppUpdate, RoleOut, RoleUpdate, UserUpdate
 from app.services import audit
 from app.services.embeddings import get_embedder
 from app.services.llm import get_provider
@@ -129,7 +129,8 @@ def create_key(app_id: int, body: ApiKeyCreate, admin: User = Depends(can_apps),
     db.flush()
     audit.record(db, "api_key.created", **audit.actor_fields(admin), app_id=app.id, details={"key_id": key.id, "prefix": prefix})
     db.commit()
-    return {**ApiKeyCreated.model_validate({**key.__dict__, "key": raw}).model_dump()}
+    db.refresh(key)
+    return {**ApiKeyOut.model_validate(key).model_dump(), "key": raw}
 
 
 @router.post("/apps/{app_id}/keys/{key_id}/revoke", status_code=204)
