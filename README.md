@@ -34,13 +34,24 @@ cp .env.example .env          # optional; defaults run fully offline with the bu
 docker compose up --build
 ```
 
-| Service | URL |
-|---|---|
-| Web app (landing, assistant, console) | http://localhost:3000 |
-| API + Swagger docs | http://localhost:8000/api/docs |
-| PostgreSQL 15 | localhost:5433 |
+| Service | Default URL | Override in `.env` |
+|---|---|---|
+| Web app (landing, assistant, console) | http://localhost:3000 | `FRONTEND_PORT` |
+| API + Swagger docs | http://localhost:8000/api/docs | `BACKEND_PORT` |
+| PostgreSQL 15 (localhost only) | `postgresql://trustshield:trustshield@localhost:5433/trustshield` | `DB_PORT` |
 
-On first start the backend runs Alembic migrations and seeds the demo tenant. Seeding replays about 14 days of traffic through the real gateway and runs the evaluation suite once. Port already taken? Set `FRONTEND_PORT`, `BACKEND_PORT`, or `DB_PORT`, e.g. `FRONTEND_PORT=3200 BACKEND_PORT=8200 docker compose up --build`.
+On first start the backend runs Alembic migrations and seeds the demo tenant. Seeding replays about 14 days of traffic through the real gateway and runs the evaluation suite once.
+
+**Port already in use?** If another project or a local Postgres holds 3000, 8000 or 5433, TrustShield's containers start but you reach *the other service* on that port. For example, `localhost:8000` returns `{"detail":"Not Found"}` from someone else's API. Run `scripts/check_ports.sh` to see who owns each port, then set free ports in `.env`:
+
+```env
+FRONTEND_PORT=3200
+BACKEND_PORT=8200
+DB_PORT=5434
+PUBLIC_APP_URL=http://localhost:3200
+```
+
+`docker compose up -d` picks these up every time. The browser only needs the frontend port; it reaches the API through the frontend's `/api` proxy.
 
 ### Demo accounts
 
