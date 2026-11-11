@@ -67,6 +67,10 @@ class ReviewCase(Base):
     requester_role: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)  # PENDING | ESCALATED | APPROVED | EDITED | REJECTED
     priority: Mapped[str] = mapped_column(String(20), default="MEDIUM", index=True)
+    # Original priority/SLA at creation. Escalation changes `priority`/`sla_due_at`; these never change, which keeps
+    # SLA evidence in compliance reports reproducible.
+    initial_priority: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    initial_sla_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     origin: Mapped[str] = mapped_column(String(30), default="input")  # input | output | escalation
     reason: Mapped[str] = mapped_column(Text)
     risk_score: Mapped[float] = mapped_column(Float, default=0.0)

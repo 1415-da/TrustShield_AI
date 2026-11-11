@@ -59,6 +59,7 @@ export interface ChatMessage {
   status: "delivered" | "pending_review" | "blocked";
   trust_status: TrustStatus | null;
   request_id: string;
+  action_id?: number | null;
   explanation: Explanation | null;
   citations: Citation[];
   created_at: string;
@@ -94,6 +95,7 @@ export interface ChatResponse {
 }
 
 export interface Rule {
+  key?: string | null;
   id?: number;
   name: string;
   rule_type: "regex" | "keyword" | "pii_entity" | "topic" | "role_permission" | "confidence_threshold";
@@ -110,34 +112,138 @@ export interface Rule {
   is_active: boolean;
 }
 
-export interface Policy {
-  id: number;
+export type VersionStatus = "DRAFT" | "IN_REVIEW" | "CHANGES_REQUESTED" | "REJECTED" | "APPROVED" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
+
+/** The immutable definition captured by a policy version. */
+export interface PolicyDefinition {
   name: string;
   description: string;
   risk_category: string;
   sensitive_data_type: string;
+  owner: string;
+  review_cadence_days: number;
+  effective_from: string | null;
+  effective_to: string | null;
   applicable_roles: string[];
+  profiles: string[];
   action: InputAction;
   severity: Severity;
   threshold: number;
   user_message: string;
-  is_active: boolean;
-  version: number;
-  created_at: string;
-  updated_at: string;
   rules: Rule[];
 }
 
 export interface PolicyVersion {
   id: number;
+  policy_id: number;
   version: number;
+  status: VersionStatus;
+  snapshot: PolicyDefinition;
+  snapshot_hash: string;
   change_summary: string;
-  changed_by: number | null;
+  based_on_version_id: number | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  created_by_email: string;
+  submitted_at: string | null;
+  approved_by_email: string | null;
+  approved_at: string | null;
+  activated_by_email: string | null;
+  activated_at: string | null;
+  deactivated_at: string | null;
   created_at: string;
-  snapshot: Record<string, unknown>;
+  updated_at: string;
+}
+
+export interface PolicySummary {
+  id: number;
+  name: string;
+  description: string;
+  risk_category: string;
+  owner: string;
+  review_cadence_days: number;
+  status: VersionStatus;
+  action: string;
+  severity: Severity;
+  rules_count: number;
+  active_version: number | null;
+  latest_version: number;
+  working_status: VersionStatus | null;
+  pending_review: boolean;
+  next_review_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PolicyDetail extends PolicySummary {
+  active: PolicyVersion | null;
+  working: PolicyVersion | null;
+  versions: { id: number; version: number; status: VersionStatus; change_summary: string; created_by_email: string; approved_by_email: string | null; created_at: string; activated_at: string | null }[];
+}
+
+/** Kept for older call sites (simulator etc.). */
+export type Policy = PolicySummary;
+
+export interface FieldChange { field: string; before: unknown; after: unknown }
+
+export interface PolicyDiff {
+  fields: FieldChange[];
+  rules_added: Rule[];
+  rules_removed: Rule[];
+  rules_changed: { key: string; name: string; changes: FieldChange[] }[];
+  has_changes: boolean;
+}
+
+export interface ImpactChange {
+  code: string; category: string; role: string; prompt: string;
+  before: { input: string; output: string | null; trust_status: string };
+  after: { input: string; output: string | null; trust_status: string };
+  now_matches_expectation: boolean;
+}
+
+export interface Impact { computed_at: string; scenarios: number; triggered: number; changed: ImpactChange[]; regressions: number }
+
+export interface PolicyApproval {
+  id: number;
+  policy_id: number;
+  version_id: number;
+  status: "PENDING" | "APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "WITHDRAWN";
+  requested_by_email: string;
+  request_note: string;
+  requested_at: string;
+  decided_by_email: string | null;
+  decision_note: string;
+  decided_at: string | null;
+  impact: Impact | null;
+  policy_name: string | null;
+  version: number | null;
+  risk_category: string | null;
+}
+
+export interface VersionDetail {
+  version: PolicyVersion;
+  compared_to: PolicyVersion | null;
+  diff: PolicyDiff;
+  approval: PolicyApproval | null;
+}
+
+export interface PolicyComment { id: number; policy_id: number; version_id: number | null; author_email: string; body: string; created_at: string }
+
+export interface PolicyAuditItem {
+  id: number; version_id: number | null; version_number: number | null; event_type: string; from_status: string | null;
+  to_status: string | null; actor_email: string | null; actor_role: string | null; note: string; details: Record<string, unknown>;
+  audit_event_id: number | null; created_at: string;
+}
+
+export interface PolicyExceptionItem {
+  id: number; policy_id: number; policy_name: string | null; subject_type: "user" | "role" | "department"; subject: string;
+  justification: string; status: "REQUESTED" | "APPROVED" | "REJECTED" | "REVOKED"; requested_by_email: string;
+  decided_by_email: string | null; decision_note: string; starts_at: string; expires_at: string; created_at: string;
+  decided_at: string | null; revoked_at: string | null; is_expired: boolean;
 }
 
 export interface Catalogue {
+  profiles: string[];
   rule_types: string[];
   match_fields: string[];
   actions: string[];
@@ -159,6 +265,7 @@ export interface RuleMatch {
   score: number;
   evidence: string;
   user_message: string;
+  policy_version?: number;
 }
 
 export interface StageOut {
@@ -188,7 +295,7 @@ export interface SimulationResult {
     explanation: Explanation | null;
     citations: Citation[];
   };
-  focus_policy: { id: number; name: string; triggered: boolean; matches: RuleMatch[] } | null;
+  focus_policy: { id: number; name: string; version?: number; triggered: boolean; matches: RuleMatch[] } | null;
 }
 
 export interface DocumentItem {
@@ -399,4 +506,159 @@ export interface ConnectedApp {
   status: "active" | "paused";
   created_at: string;
   keys: ApiKey[];
+}
+
+// ---------------------------------------------------------------- compliance evidence
+export type ReportType = "governance_summary" | "sensitive_data" | "human_oversight" | "policy_changes" | "exceptions";
+
+export interface ReportSection { title: string; description: string; columns: string[]; rows: (string | number)[][]; empty: string }
+
+export interface ReportContent {
+  report_type: ReportType;
+  title: string;
+  period: { start: string; end: string };
+  filters: Record<string, unknown>;
+  summary: string[];
+  metrics: { label: string; value: string | number; hint?: string }[];
+  sections: ReportSection[];
+  evidence: { audit_events: number; source_hash: string; statement: string };
+}
+
+export interface ComplianceReport {
+  id: number;
+  report_type: ReportType;
+  title: string;
+  status: "GENERATING" | "READY" | "FAILED" | "EXPIRED";
+  version: number;
+  filters: Record<string, unknown>;
+  period_start: string;
+  period_end: string;
+  content_hash: string | null;
+  source_record_count: number;
+  generated_by_email: string;
+  schedule_id: number | null;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+  expires_at: string | null;
+  deleted_at: string | null;
+  content?: ReportContent | null;
+}
+
+export interface ReportOptions {
+  report_types: { key: ReportType; title: string; description: string }[];
+  departments: string[];
+  policies: { id: number; name: string }[];
+  risk_levels: string[];
+  reviewers: string[];
+}
+
+export interface ReportSchedule {
+  id: number; report_type: ReportType; title: string; filters: Record<string, unknown>; cadence: "weekly" | "monthly";
+  retention_days: number | null; is_active: boolean; created_by_email: string; source_report_id: number | null;
+  next_run_at: string; last_run_at: string | null; last_report_id: number | null; created_at: string;
+}
+
+export interface VerifyResult {
+  stored_hash: string; stored_content_matches_hash: boolean; regenerated_hash: string; reproducible: boolean;
+  source_records: number; verified_at: string;
+}
+
+// ---------------------------------------------------------------- connected workspace / Slack
+export interface WorkspaceChannel {
+  id: number; external_id: string; name: string; description: string; policy_hint: string; profile_key: string;
+  profile_name: string; source: "internal" | "slack"; is_enabled: boolean; updated_at: string;
+}
+
+export interface WorkspaceReply {
+  kind: "answer" | "notice" | "private";
+  text: string;
+  trust_status: TrustStatus | null;
+  status?: ChatMessage["status"];
+  citations?: Citation[];
+  explanation?: Explanation | null;
+  message_id?: number;
+  conversation_id?: number | null;
+  request_id?: string | null;
+  review_case_id?: number | null;
+  updated_at?: string;
+}
+
+export interface WorkspaceItem {
+  event_id: string; id: number; source: "workspace" | "slack"; created_at: string; is_mine: boolean;
+  author: { name: string; department: string }; text: string | null; withheld: boolean; reply: WorkspaceReply;
+}
+
+export interface IntegrationStatus {
+  slack: { mode: "connected" | "disabled" | "not_configured"; configured: boolean; enabled: boolean; missing: string[];
+    workspace_name: string | null; events_endpoint: string; interactions_endpoint: string; required_bot_scopes: string[];
+    socket_mode_token_configured: boolean };
+  workspace: { enabled: boolean; channels: number; enabled_channels: number };
+  events: { by_status: Record<string, number>; by_source: Record<string, number>; last_event_at: string | null };
+  checked_at: string;
+}
+
+export interface IntegrationEvent {
+  id: number; event_id: string; source: string; channel: string | null; user_email: string | null; status: string;
+  deliveries: number; attempts: number; trust_status: string | null; input_action: string | null; request_id: string | null;
+  review_case_id: number | null; text_masked: string; error: string | null; created_at: string; processed_at: string | null;
+  response_updated_at: string | null;
+}
+
+// ---------------------------------------------------------------- agent actions
+export type ActionStatus = "PENDING_APPROVAL" | "IN_REVIEW" | "ESCALATED" | "NEEDS_INFO" | "APPROVED" | "EXECUTING" | "EXECUTED"
+  | "REJECTED" | "BLOCKED" | "FAILED" | "COMPENSATED";
+
+export interface AgentActionItem {
+  id: number;
+  agent: { key: string; name: string } | null;
+  requester_email: string;
+  requester_role: string;
+  action_type: string | null;
+  category: string | null;
+  status: ActionStatus;
+  decision: string | null;
+  summary: string;
+  target_system: string;
+  target_record: string;
+  amount: number | null;
+  currency: string | null;
+  external: boolean;
+  risk_score: number;
+  required_approver_role: string | null;
+  policy_basis: { policy_id: number | null; name: string; decision: string; approver_role?: string | null; reason: string }[];
+  missing_info: string[];
+  info_request_note: string | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  conversation_id: number | null;
+  created_at: string;
+  updated_at: string;
+  decided_at: string | null;
+  executed_at: string | null;
+  employee_view: { headline: string; eta: string; reason: string; needs: string[]; note: string | null };
+  audit_reference: string;
+  request_text_masked?: string;
+  params?: Record<string, unknown>;
+  approvals?: { id: number; approver_role: string; status: string; decided_by_email: string | null; note: string; created_at: string; decided_at: string | null }[];
+  executions?: { id: number; executor: string; attempt: number; status: string; result: Record<string, unknown> | null; error: string | null; executed_by_email: string; started_at: string; finished_at: string | null }[];
+  idempotent_replay?: boolean;
+}
+
+export interface ActionAuditItem {
+  id: number; event_type: string; from_status: string | null; to_status: string | null; actor_email: string | null;
+  actor_role: string | null; note: string; details: Record<string, unknown>; audit_event_id: number | null; created_at: string;
+}
+
+export interface ActionPolicyItem {
+  id: number; name: string; description: string; action_type: string | null; category: string | null;
+  conditions: Record<string, unknown>; decision: string; approver_role: string | null; priority: number; is_active: boolean;
+  created_by_email: string; updated_at: string;
+}
+
+export interface AgentCatalog {
+  agents: { id: number; key: string; name: string; description: string; owner_team: string; status: string; allowed_action_types: string[] }[];
+  action_types: { id: number; key: string; name: string; category: string; description: string; target_system: string; executor: string; required_permission: string | null; is_enabled: boolean }[];
+  categories: string[];
+  decisions: string[];
 }

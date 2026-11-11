@@ -8,6 +8,7 @@ import { ENTITY_LABELS, humanize, ROLE_LABELS } from "@/lib/format";
 import type { Catalogue, Rule } from "@/lib/types";
 
 export const EMPTY_RULE: Rule = {
+  key: null,
   name: "", rule_type: "keyword", match_field: "user_input", pattern: null, keywords: [], entity_types: [], topic: null,
   required_permission: null, threshold: null, action: null, severity: null, applies_to_roles: [], is_active: true,
 };

@@ -21,6 +21,15 @@ Internal AI assistants stall in security review. Employees paste sensitive data 
 | **Audit trail** | Append-only, hash-chained events with request ID, role, policies triggered, risk scores, model, latency |
 | **Role-based access** | Employees, reviewers, admins, and auditors each see exactly what their role allows |
 
+### New in Release 2
+
+| Capability | What it means in practice |
+|---|---|
+| **Policy versioning & approvals** | Drafts, a second-person approval with diff and impact analysis, deliberate activation, one-click rollback — production only runs approved versions |
+| **Compliance Evidence Center** | Audit-ready governance reports in minutes: immutable, hashed, reproducible from audit records, exportable as HTML, Markdown or a JSON evidence package |
+| **Slack & connected workspace** | Team channels answered through the same guardrails, review workflow and audit trail; channel-level policy profiles |
+| **Agent action controls** | Agents request actions; TrustShield classifies, checks permissions and approval rules, routes to the right approver, and executes exactly once |
+
 ### Every request gets one of five decisions
 
 `ALLOW` · `REDACT` · `BLOCK` · `REVIEW` · `ESCALATE`

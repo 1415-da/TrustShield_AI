@@ -1,11 +1,11 @@
 "use client";
 
-import { LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, X } from "lucide-react";
+import { Hash, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Composer } from "@/components/assistant/composer";
+import { Composer, type ComposerMode } from "@/components/assistant/composer";
 import { MessageView } from "@/components/assistant/message";
 import { Logo } from "@/components/brand/logo";
 import { Dot } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import { CONSOLE_PERMISSIONS, useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import { api, ApiError } from "@/lib/api";
 import { readableMasks, ROLE_LABELS, timeAgo } from "@/lib/format";
-import type { ChatMessage, ChatResponse, ConversationDetail, ConversationSummary } from "@/lib/types";
+import type { AgentActionItem, ChatMessage, ChatResponse, ConversationDetail, ConversationSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const SUGGESTIONS = [
@@ -41,8 +41,14 @@ export default function AssistantPage() {
   const [error, setError] = useState<ApiError | null>(null);
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
+  const [mode, setMode] = useState<ComposerMode>("ask");
   const bottom = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    // Deep link from the connected workspace / Slack: /assistant?c=<conversation id>
+    const c = Number(new URLSearchParams(window.location.search).get("c"));
+    if (c) setActiveId(c);
+  }, []);
   useEffect(() => {
     if (!loading && !user) router.replace("/login?next=/assistant");
     else if (!loading && user && !can("assistant:use")) router.replace("/console");
@@ -73,6 +79,15 @@ export default function AssistantPage() {
     };
     setMessages((m) => [...m, optimistic]);
     try {
+      if (mode === "action") {
+        const action = await api<AgentActionItem>("/agent/actions", { method: "POST", body: {
+          request: prompt, conversation_id: activeId, record_in_conversation: true, idempotency_key: crypto.randomUUID?.() } });
+        const conv = await api<ConversationDetail>(`/assistant/conversations/${action.conversation_id}`);
+        setMessages(conv.messages);
+        if (action.conversation_id !== activeId) setActiveId(action.conversation_id);
+        void convs.reload();
+        return;
+      }
       const res = await api<ChatResponse>("/assistant/chat", { method: "POST", body: { message: prompt, conversation_id: activeId } });
       setMessages((m) => [...m.filter((x) => x.id !== optimistic.id), res.user_message, res.message]);
       if (res.conversation_id !== activeId) setActiveId(res.conversation_id);
@@ -84,7 +99,7 @@ export default function AssistantPage() {
     } finally {
       setSending(false);
     }
-  }, [draft, activeId, convs]);
+  }, [draft, activeId, convs, mode]);
 
   const openConversation = (id: number | null) => {
     setActiveId(id);
@@ -127,6 +142,7 @@ export default function AssistantPage() {
         ))}
       </nav>
       <div className="border-t border-hair p-3">
+        <Link href="/workspace" className="mb-1 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]" data-testid="open-workspace"><Hash className="h-4 w-4" />Team channels</Link>
         {CONSOLE_PERMISSIONS.some(can) && (
           <Link href="/console" className="mb-1 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]"><LayoutDashboard className="h-4 w-4" />Open console</Link>
         )}
@@ -185,7 +201,7 @@ export default function AssistantPage() {
                   <div className="flex items-center gap-3 text-[13px] text-ink-500" role="status">
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-forest-50"><ShieldCheck className="h-4 w-4 text-forest" /></span>
                     <span className="flex gap-1">{[0, 1, 2].map((i) => <span key={i} className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-forest" style={{ animationDelay: `${i * 150}ms` }} />)}</span>
-                    Checking policies…
+                    {mode === "action" ? "Checking permissions and approval rules…" : "Checking policies…"}
                   </div>
                 )}
               </div>
@@ -201,7 +217,7 @@ export default function AssistantPage() {
 
         <div className="border-t border-hair bg-cream/90 px-4 pb-5 pt-3 backdrop-blur sm:px-6">
           <div className="mx-auto max-w-3xl">
-            <Composer value={draft} onChange={setDraft} onSend={() => void send()} busy={sending} />
+            <Composer value={draft} onChange={setDraft} onSend={() => void send()} busy={sending} mode={mode} onModeChange={can("actions:request") ? setMode : undefined} />
             <p className="mt-2 text-center text-[11.5px] text-ink-400">Answers are checked against NovaCorp policy. Confidence scores are risk signals, not guarantees.</p>
           </div>
         </div>

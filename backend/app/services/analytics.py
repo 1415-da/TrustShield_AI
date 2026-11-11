@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.models import AuditEvent, GuardrailDecision, ReviewCase, TestRun
 from app.models.base import utcnow
 
-REQUEST_EVENTS = ("assistant.request",)
+REQUEST_EVENTS = ("assistant.request", "workspace.request", "slack.request")
 
 
 def _bucket(ev: AuditEvent) -> str:
@@ -62,7 +62,7 @@ def overview(db: Session, days: int = 14) -> dict:
         "p50_latency_ms": latencies[len(latencies) // 2] if latencies else None,
         "timeline": timeline,
         "latest_test_run": _run_summary(latest_run),
-        "data_label": "Synthetic demo data",
+        "data_label": "Operational data",
     }
 
 

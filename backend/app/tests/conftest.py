@@ -9,6 +9,7 @@ os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["LLM_PROVIDER"] = "mock"
 os.environ["JWT_SECRET"] = "test-secret-not-for-production-use-0123456789"
 os.environ["DEMO_USER_PASSWORD"] = "test-password-123"
+os.environ["SCHEDULER_ENABLED"] = "false"
 
 from collections.abc import Iterator  # noqa: E402
 
@@ -87,7 +88,9 @@ def login(client: TestClient, email: str) -> dict[str, str]:
 @pytest.fixture(scope="session")
 def headers(client: TestClient) -> dict[str, dict[str, str]]:
     return {k: login(client, v) for k, v in
-            {"employee": EMPLOYEE, "hr": HR, "finance": FINANCE, "reviewer": REVIEWER, "auditor": AUDITOR, "admin": ADMIN}.items()}
+            {"employee": EMPLOYEE, "hr": HR, "finance": FINANCE, "reviewer": REVIEWER, "auditor": AUDITOR, "admin": ADMIN,
+             "finance_head": "vivek.raman@novacorp.test", "security_admin": "tara.bose@novacorp.test",
+             "manager": "aditya.kulkarni@novacorp.test"}.items()}
 
 
 def actor(role: str, perms: set[str] | None = None) -> Actor:

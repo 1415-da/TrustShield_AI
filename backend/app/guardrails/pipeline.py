@@ -27,6 +27,8 @@ class Actor:
     roles: set[str]
     permissions: set[str]
     primary_role: str
+    department: str = ""
+    profile: str | None = None  # channel policy profile when the request arrives via a workspace channel
 
 
 @dataclass
@@ -96,7 +98,7 @@ class GuardrailEngine:
         return FieldAnalysis(text=text, entities=entities, topics=topics, confidence=confidence)
 
     def _ctx(self, actor: Actor, field_name: str, analysis: FieldAnalysis) -> EvaluationContext:
-        return EvaluationContext(roles=actor.roles, permissions=actor.permissions, fields={field_name: analysis})
+        return EvaluationContext(roles=actor.roles, permissions=actor.permissions, fields={field_name: analysis}, profile=actor.profile)
 
     # ------------------------------------------------------------------ input
     def run_input(self, prompt: str, actor: Actor) -> InputOutcome:

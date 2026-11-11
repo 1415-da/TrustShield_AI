@@ -50,7 +50,7 @@ export function Architecture() {
           </div>
           <ArrowRight className="mx-auto hidden h-5 w-5 text-ink-400 lg:block" aria-hidden />
           <ArrowDown className="mx-auto h-5 w-5 text-ink-400 lg:hidden" aria-hidden />
-          <Node title="LLM provider" sub="OpenAI-compatible, Azure OpenAI, or the offline mock — credentials stay server-side" tone="dark" />
+          <Node title="LLM provider" sub="OpenAI-compatible, Azure OpenAI, or the built-in offline model — credentials stay server-side" tone="dark" />
         </div>
 
         <div className="mx-auto mt-4 grid max-w-xl gap-4 sm:grid-cols-2">

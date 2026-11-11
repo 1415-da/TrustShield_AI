@@ -94,10 +94,10 @@ export function Trust() {
 }
 
 const METRICS = [
-  ["49", "labelled evaluation scenarios ship with the demo, across 17 test categories"],
+  ["49", "labelled evaluation scenarios ship with the evaluation suite, across 17 categories"],
   ["5", "possible decisions per request — every request gets exactly one, and it is logged"],
   ["0", "model calls on blocked or escalated requests, enforced by an automated test"],
-  ["14", "seeded policies across injection, compensation, financial data, PII, legal and quality"],
+  ["5", "decisions for agent actions — execute, approve, review, escalate or block — before anything changes"],
 ];
 
 export function Metrics() {
@@ -105,8 +105,8 @@ export function Metrics() {
     <section className="border-y border-hair bg-cream-50/60" aria-labelledby="metrics-title">
       <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <h2 id="metrics-title" className="text-[30px] leading-tight sm:text-[34px]">What the demo environment measures</h2>
-          <p className="rounded-full border border-hair px-3 py-1 text-[12px] text-ink-500">Simulated demo data · synthetic NovaCorp tenant</p>
+          <h2 id="metrics-title" className="text-[30px] leading-tight sm:text-[34px]">Governance you can measure</h2>
+          <p className="rounded-full border border-hair px-3 py-1 text-[12px] text-ink-500">Governance metrics · NovaCorp workspace</p>
         </div>
         <dl className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {METRICS.map(([n, label]) => (
@@ -116,7 +116,7 @@ export function Metrics() {
             </div>
           ))}
         </dl>
-        <p className="mt-10 max-w-2xl text-[13px] text-ink-500">Pass rate, false-positive and false-negative figures are computed live by the Test Center against these scenarios. We don't publish production performance claims for a demo.</p>
+        <p className="mt-10 max-w-2xl text-[13px] text-ink-500">Pass rate, false-positive and false-negative figures are computed live by the Test Center against these scenarios — measured in your environment, not claimed in ours.</p>
       </div>
     </section>
   );
@@ -124,10 +124,12 @@ export function Metrics() {
 
 const FAQS = [
   ["Does TrustShield replace our LLM provider?", "No. It sits in front of whichever OpenAI-compatible or Azure OpenAI endpoint you already use. Without an API key it runs on a deterministic offline model so you can evaluate it safely."],
+  ["Can agents take actions on their own?", "Only within rules you set. Every agent action is classified, checked against the requester's role and your approval rules, and executed through a controlled executor — high-value or destructive actions wait for the right approver."],
+  ["Can we prove compliance to an auditor?", "Yes. The Compliance Evidence Center generates immutable, hashed reports from audit records, and anyone can re-verify that a report regenerates identically from the same records."],
   ["How do you detect hallucinations?", "We don't claim to. TrustShield computes a grounding risk signal from evidence overlap, citations, similarity and contradiction cues. Low scores add a warning or route the answer to a reviewer."],
   ["Can admins change rules without engineering?", "Yes. Policies and their rules are stored in the database, versioned on every change, and can be tested in the simulator — including inactive drafts — before activation."],
   ["What gets stored about a request?", "The masked prompt and answer, the decision at each stage, the rules that fired, risk scores, model and latency. Raw sensitive values are represented only by hashes."],
-  ["Is any real personal data in the demo?", "No. NovaCorp Technologies is fictional. Every name, email, phone number, salary band and identifier is synthetic test data."],
+  ["Where does our data live?", "In your PostgreSQL database, inside your network. Sensitive values are masked before storage, and model credentials never reach the browser."],
 ];
 
 export function Faq() {
@@ -161,13 +163,13 @@ export function DemoRequest() {
       <div className="grid gap-10 rounded-[32px] bg-lilac-200 p-8 sm:p-12 lg:grid-cols-2">
         <div>
           <h2 id="demo-title" className="text-[34px] leading-tight sm:text-[40px]">See it with your own policies.</h2>
-          <p className="mt-4 max-w-md text-ink-700">Tell us a little about your rollout. This is a portfolio demo, so nothing is sent anywhere — but the live product is one click away.</p>
+          <p className="mt-4 max-w-md text-ink-700">Tell us a little about your rollout and we&apos;ll arrange a walkthrough with your own policies. Or explore the live product now.</p>
           <a href="/login" className="link mt-6 inline-block text-[15px]">Explore the live product instead →</a>
         </div>
         {sent ? (
           <div role="status" className="flex flex-col justify-center rounded-3xl border border-lilac-400/60 bg-cream-50 p-8">
             <p className="font-serif text-[26px]">Thank you.</p>
-            <p className="mt-2 text-ink-700">In a real deployment this would reach our team. For now, sign in with one of the demo accounts to see TrustShield in action.</p>
+            <p className="mt-2 text-ink-700">Your request was recorded in this browser only — this environment doesn&apos;t transmit form data. Sign in to explore TrustShield in the meantime.</p>
           </div>
         ) : (
           <form onSubmit={submit} className="grid gap-4 rounded-3xl border border-lilac-400/60 bg-cream-50 p-6 sm:grid-cols-2">
@@ -190,7 +192,7 @@ export function Footer() {
   return (
     <footer className="border-t border-hair">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-10 text-[13px] text-ink-500 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <p>© {new Date().getFullYear()} TrustShield AI · Portfolio MVP. All demo data is synthetic.</p>
+        <p>© {new Date().getFullYear()} TrustShield AI · AI governance gateway</p>
         <div className="flex gap-6">
           <a href="#platform" className="hover:text-ink">Platform</a>
           <a href="#trust" className="hover:text-ink">Trust</a>

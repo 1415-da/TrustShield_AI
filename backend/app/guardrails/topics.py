@@ -102,6 +102,20 @@ class TopicAnalysis:
         return {k: {"score": round(v.score, 3), "signals": v.signals} for k, v in self.scores.items() if v.score > 0}
 
 
+# Capitalised possessives that are not people ("Friday's payment run", "NovaCorp's policy").
+NON_PERSON_POSSESSIVES = frozenset(
+    "NovaCorp TrustShield Today Tomorrow Yesterday Company India It What That This Team Finance Legal HR IT Engineering "
+    "Monday Tuesday Wednesday Thursday Friday Saturday Sunday January February March April May June July August "
+    "September October November December Q1 Q2 Q3 Q4 Year Month Week".split()
+)
+
+
+ORG_SUFFIXES = frozenset(
+    "supplies supply ltd limited inc corp corporation llc llp pvt plc co technologies technology solutions services systems "
+    "traders trading industries enterprises group logistics labs partners holdings consulting".split()
+)
+
+
 def find_target_people(text: str, directory_names: list[str], entities: list[Entity]) -> list[str]:
     """People the prompt points at: synthetic directory names, possessive names, or NER PERSON entities."""
     found: list[str] = []
@@ -112,13 +126,19 @@ def find_target_people(text: str, directory_names: list[str], entities: list[Ent
             found.append(name)
     for m in re.finditer(r"\b([A-Z][a-z]+(?: [A-Z][a-z]+)?)'s\b", text):
         candidate = m.group(1)
-        if candidate not in {"NovaCorp", "TrustShield", "Today", "Company", "India", "It", "What", "That"} and not any(
+        if candidate.split()[0] not in NON_PERSON_POSSESSIVES and not any(
             candidate.split()[0] in f for f in found
         ):
             found.append(candidate)
     for e in entities:
-        if e.entity_type == "PERSON" and e.score >= 0.6 and not any(e.text.split()[0] in f for f in found):
-            found.append(e.text)
+        if e.entity_type != "PERSON" or e.score < 0.6 or any(e.text.split()[0] in f for f in found):
+            continue
+        # The small spaCy model sometimes labels organisations as people ("Orion Supplies"); skip obvious ones.
+        last = e.text.split()[-1].strip(".,").lower()
+        preceding = text[max(0, e.start - 14):e.start].lower()
+        if last in ORG_SUFFIXES or re.search(r"\b(vendor|supplier|client|company|customer|firm)\s*$", preceding):
+            continue
+        found.append(e.text)
     return found
 
 

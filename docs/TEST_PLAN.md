@@ -12,14 +12,18 @@
 | Layer | Tool | Where | Count | Needs services? |
 |---|---|---|---|---|
 | Unit — PII recognizers | pytest | `backend/app/tests/test_pii.py` | 10 | No |
-| Unit — injection & topic classifiers | pytest | `test_classifiers.py` | 8 | No |
+| Unit — injection & topic classifiers (incl. regressions) | pytest | `test_classifiers.py` | 9 | No |
 | Unit — rule evaluator, precedence, grounding | pytest | `test_rules_grounding.py` | 10 | No |
 | Integration — gateway pipeline | pytest + spy provider | `test_gateway.py` | 12 | No |
-| Integration — HTTP API & workflows | pytest + TestClient | `test_api.py` | 31 | No |
+| Integration — HTTP API & review workflow | pytest + TestClient | `test_api.py` | 30 | No |
 | Evaluation — seeded scenarios | pytest (parametrised) | `test_evaluation.py` | 49 | No |
-| End-to-end — UI flows | Playwright | `frontend/tests/e2e/` | 8 | Yes (running stack) |
+| Feature 1 — policy versioning & approvals | pytest | `test_policy_workflow.py` | 18 | No |
+| Feature 2 — compliance evidence | pytest | `test_compliance.py` | 17 | No |
+| Feature 3 — Slack & connected workspace | pytest (+ signed Slack requests through Bolt) | `test_workspace_slack.py` | 19 | No |
+| Feature 4 — agent action controls | pytest | `test_agent_actions.py` | 23 | No |
+| End-to-end — UI flows | Playwright | `frontend/tests/e2e/` | 11 | Yes (running stack) |
 
-**Total: 120 backend tests + 8 Playwright tests.** Backend tests use SQLite in-memory and the offline mock model, so they run in ~7 seconds with no network or Docker.
+**Total: 197 backend tests + 11 Playwright tests.** Backend tests use SQLite in-memory and the offline model, so they run in ~9 seconds with no network, Slack workspace, or Docker.
 
 ## 3. Evaluation suite (Test Center)
 
@@ -53,7 +57,7 @@
 - **False negative:** a *restrictive* case that was neither blocked, reviewed, nor redacted.
 - *Either* cases are excluded from FP/FN so ambiguity doesn't inflate either number.
 
-Current result (mock model, seeded data): **49/49 passed, 0 FP of 12 safe, 0 FN of 31 restrictive.** This is a regression baseline for a suite we wrote alongside the guardrails. It is not evidence of real-world accuracy (see §7).
+Current result (offline model, seeded data): **49/49 passed, 0 FP of 12 safe, 0 FN of 31 restrictive.** This is a regression baseline for a suite we wrote alongside the guardrails. It is not evidence of real-world accuracy (see §7).
 
 ## 4. Requirement → test traceability
 
@@ -82,7 +86,7 @@ Current result (mock model, seeded data): **49/49 passed, 0 FP of 12 safe, 0 FN 
 ## 5. Running the tests
 
 ```bash
-# Backend: hermetic, ~7s
+# Backend: hermetic, ~9s
 cd backend && .venv/bin/python -m pytest
 
 # Everything + Markdown report (reports/TEST_REPORT.md)
@@ -98,8 +102,21 @@ The in-app **Test Center** (`/console/tests`) runs the same 49 scenarios against
 - 390px phone width: landing, assistant drawer, console navigation drawer.
 - With `LLM_PROVIDER=openai` and a real key: the same suite should still pass the input-side cases. Output-side cases depend on the model's wording.
 
-## 7. Known limits
+## 7. Release 2 feature test matrix
+
+| Feature | Positive | Negative | Permission | Security / integrity | Idempotency / SLA | Audit | UI (Playwright) |
+|---|---|---|---|---|---|---|---|
+| **Policy workflow** | create draft; submit; approve; activate enforces; rollback creates v(n+1); simulation uses draft; impact analysis | activate without approval → 409; reject; request changes needs a note; edit while in review → 409 | auditor read-only; reviewer can't author; employee 403; **SoD**: author can't approve | DB index refuses 2nd ACTIVE; submitted snapshot immutable (ORM guard) | — | every transition → `policy_audit_events` + hash-chained `audit_events` | draft → simulate → submit → approve (2nd user) → activate → audit drawer |
+| **Exceptions** | approved exception exempts role; employees still covered | requested exception has no effect; > 365 days refused | requester can't approve own | expiry ends exemption automatically | — | `exception_*` events | (Exceptions page) |
+| **Evidence Center** | all 5 report types; filters by date, department, policy | empty period; withdraw keeps record | employee/finance 403; auditor can read, not generate | content hash stored; **verify reproducible** after new traffic; READY report immutable (content & status) | schedule runs when due; retention → EXPIRED | requested / generated / exported / verified / withdrawn | generate → preview → verify → export download |
+| **Slack / workspace** | grounded answer; salary blocked; PII redacted; injection blocked; review case; reviewer approval updates Slack thread; channel mapping (finance vs general, remap) | Slack disabled → safe fallback; unlinked user rejected; disabled channel hidden | admin-only channel changes; auditor can read events | **signature verification** (bad secret / stale timestamp → 401); url_verification; tokens never in status; others can't see refused requests | Slack retries processed once (`deliveries=3`); client message id dedupe; **rate limit**; failed event retry | `workspace.request` / `slack.request`, `*.response_updated`, rejections | ask in `#finance-help`: verified, held-for-review, blocked |
+| **Agent actions** | classify read/financial/destructive; small reimbursement auto-executes; amount thresholds; Finance Head approval → executes once; compensation; recorded in conversation | unauthorised role → BLOCK; injection → BLOCK; missing details → NEEDS_INFO; executor failure → FAILED then retry | wrong approver role 403; employee 403; **requester can't approve own**; admin-only views | DB index refuses 2nd successful execution; permissions re-checked at execution | **idempotency key** replay returns original; execute twice → 409 | requested → decided → approved → executing → executed, each mirrored | analyst requests refund → Finance Head approves → card updates to EXECUTED |
+
+## 8. Known limits
 
 - The classifiers are heuristic. The suite was written alongside them, so 100% here shows the rules do what we designed. It doesn't show they generalise. Novel phrasings will be missed. Add each one as a test case when you find it.
-- Grounding scores are calibrated for the mock model. A real model's phrasing will shift confidence values, so thresholds may need tuning in Policy Studio.
+- Grounding scores are calibrated for the offline model. A real model's phrasing will shift confidence values, so thresholds may need tuning in Policy Studio.
 - The Postgres append-only trigger is exercised in the Docker deployment. Unit tests cover the equivalent ORM guard on SQLite.
+- Real Slack delivery is tested with signed requests through the real Bolt app and a captured notifier; posting to an actual Slack workspace requires credentials and is a manual check (`POST /api/integrations/slack/test`).
+- Agent executors run against in-process systems of record. Integration tests against real finance/HR systems belong with each real executor.
+- The agent action classifier is deterministic and covers the catalogue's phrasing; unrecognised requests return NEEDS_INFO rather than guessing.

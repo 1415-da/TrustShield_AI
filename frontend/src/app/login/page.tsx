@@ -17,6 +17,8 @@ const DEMO_ACCOUNTS = [
   { email: "ananya.rao@novacorp.test", name: "Ananya Rao", role: "Employee", note: "Uses the assistant" },
   { email: "neha.kapoor@novacorp.test", name: "Neha Kapoor", role: "HR Manager", note: "Has compensation scope" },
   { email: "kavya.menon@novacorp.test", name: "Kavya Menon", role: "Compliance Reviewer", note: "Works the review queue" },
+  { email: "rahul.verma@novacorp.test", name: "Rahul Verma", role: "Finance Analyst", note: "Requests agent actions" },
+  { email: "vivek.raman@novacorp.test", name: "Vivek Raman", role: "Finance Head", note: "Approves high-value actions" },
   { email: "rohan.das@novacorp.test", name: "Rohan Das", role: "TrustShield Admin", note: "Policies, users, apps" },
   { email: "sanjay.gupta@novacorp.test", name: "Sanjay Gupta", role: "Security / Audit", note: "Read-only oversight" },
 ];
@@ -66,7 +68,7 @@ function LoginForm() {
           </form>
           <p className="mt-6 flex items-center gap-2 text-[12.5px] text-ink-500"><Lock className="h-3.5 w-3.5" /> Sessions use short-lived tokens. All activity is audited.</p>
           <div className="mt-10 lg:hidden" aria-label="Demo accounts">
-            <p className="eyebrow mb-3">Demo accounts · synthetic data</p>
+            <p className="eyebrow mb-3">Workspace accounts</p>
             <div className="flex flex-wrap gap-2">
               {DEMO_ACCOUNTS.map((a) => (
                 <button key={a.email} onClick={() => void submit(undefined, { email: a.email, password: DEMO_PASSWORD })}
@@ -82,9 +84,9 @@ function LoginForm() {
       <aside className="relative hidden overflow-hidden bg-forest px-12 py-10 text-cream lg:flex lg:flex-col lg:justify-center" aria-label="Demo accounts">
         <div aria-hidden className="absolute -right-24 top-10 h-80 w-80 rounded-full bg-lilac/20 blur-3xl" />
         <div className="relative max-w-md">
-          <p className="eyebrow text-cream/60">Demo environment</p>
+          <p className="eyebrow text-cream/60">NovaCorp workspace</p>
           <h2 className="mt-3 text-[34px] leading-tight text-cream">Explore as any role at NovaCorp.</h2>
-          <p className="mt-3 text-[14px] text-cream/75">NovaCorp Technologies is a fictional company. Every person and record is synthetic test data.</p>
+          <p className="mt-3 text-[14px] text-cream/75">Each account shows TrustShield from a different seat: the employee asking, the reviewer deciding, the admin governing, the auditor checking.</p>
           <ul className="mt-8 space-y-2">
             {DEMO_ACCOUNTS.map((a) => (
               <li key={a.email}>
@@ -102,7 +104,7 @@ function LoginForm() {
               </li>
             ))}
           </ul>
-          <p className="mt-6 text-[12px] text-cream/50">Demo password: <code className="font-mono text-cream/80">{DEMO_PASSWORD}</code></p>
+          <p className="mt-6 text-[12px] text-cream/50">Workspace password: <code className="font-mono text-cream/80">{DEMO_PASSWORD}</code></p>
         </div>
       </aside>
     </div>

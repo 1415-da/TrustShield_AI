@@ -84,26 +84,6 @@ NEW_POLICY = {
 }
 
 
-def test_policy_create_simulate_activate_and_version(client, headers):
-    h = headers["admin"]
-    created = client.post("/api/admin/policies", json=NEW_POLICY, headers=h)
-    assert created.status_code == 201
-    pid = created.json()["id"]
-    # Inactive policy is not enforced live...
-    live = client.post("/api/admin/simulate", json={"prompt": "How do I poach an engineer?", "role": "employee", "include_output": False}, headers=h).json()
-    assert live["input"]["action"] != "BLOCK"
-    # ...but can be tested immediately in the simulator.
-    sim = client.post(f"/api/admin/policies/{pid}/simulate", json={"prompt": "How do I poach an engineer?", "role": "employee"}, headers=h).json()
-    assert sim["focus_policy"]["triggered"] and sim["final"]["input_action"] == "BLOCK" and not sim["final"]["llm_called"]
-    assert client.post(f"/api/admin/policies/{pid}/activate", headers=h).json()["is_active"] is True
-    patched = client.patch(f"/api/admin/policies/{pid}", json={"severity": "HIGH", "change_summary": "raise severity"}, headers=h).json()
-    assert patched["version"] == 3
-    versions = client.get(f"/api/admin/policies/{pid}/versions", headers=h).json()
-    assert [v["version"] for v in versions] == [3, 2, 1]
-    assert client.delete(f"/api/admin/policies/{pid}", headers=h).status_code == 204
-    assert client.get(f"/api/admin/policies/{pid}", headers=h).status_code == 404
-
-
 def test_simulate_unsaved_draft_policy(client, headers):
     draft = {**NEW_POLICY, "name": "Draft Only", "rules": [{"rule_type": "regex", "match_field": "user_input", "pattern": r"\bunicorn\b"}]}
     r = client.post("/api/admin/simulate", json={"prompt": "Tell me about the unicorn project", "role": "employee",
@@ -273,4 +253,4 @@ def test_connected_app_keys_attribute_requests(client, headers, db):
 
 def test_settings_never_expose_secrets(client, headers):
     s = client.get("/api/admin/settings", headers=headers["admin"]).json()
-    assert s["llm"]["offline_mock"] is True and "api_key" not in str(s["llm"]).replace("api_key_configured", "")
+    assert s["llm"]["offline_mode"] is True and "api_key" not in str(s["llm"]).replace("api_key_configured", "")

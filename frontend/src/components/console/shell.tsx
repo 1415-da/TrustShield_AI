@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BookOpenText, FlaskConical, Gauge, KeyRound, LogOut, Menu, MessagesSquare, PlugZap, ScrollText, Settings2, ShieldCheck,
+  BookOpenText, Bot, CircleSlash2, Hash, FileCheck2, FlaskConical, Gauge, Inbox, KeyRound, LogOut, Menu, MessagesSquare, PlugZap, ScrollText, Settings2, ShieldCheck,
   SlidersHorizontal, Users, X, type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -16,29 +16,36 @@ import { ROLE_LABELS } from "@/lib/format";
 import type { ReviewCase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-interface NavItem { href: string; label: string; Icon: LucideIcon; perm: string }
+interface NavItem { href: string; label: string; Icon: LucideIcon; perm: string | string[] }
+
+const allowed = (can: (p: string) => boolean, perm: string | string[]) => (Array.isArray(perm) ? perm.some(can) : can(perm));
 
 export const NAV: { group: string; items: NavItem[] }[] = [
   { group: "Govern", items: [
     { href: "/console", label: "Overview", Icon: Gauge, perm: "analytics:read" },
     { href: "/console/policies", label: "Policy Studio", Icon: ShieldCheck, perm: "policies:read" },
+    { href: "/console/approvals", label: "Policy approvals", Icon: Inbox, perm: "policies:read" },
+    { href: "/console/exceptions", label: "Exceptions", Icon: CircleSlash2, perm: "policies:read" },
     { href: "/console/simulator", label: "Simulator", Icon: SlidersHorizontal, perm: "policies:read" },
     { href: "/console/documents", label: "Knowledge sources", Icon: BookOpenText, perm: "documents:read" },
   ] },
   { group: "Operate", items: [
     { href: "/console/reviews", label: "Review queue", Icon: MessagesSquare, perm: "reviews:read" },
+    { href: "/console/agents", label: "Agent Control Center", Icon: Bot, perm: ["agents:read", "actions:approve"] },
+    { href: "/console/evidence", label: "Evidence Center", Icon: FileCheck2, perm: "compliance:read" },
     { href: "/console/audit", label: "Audit log", Icon: ScrollText, perm: "audit:read" },
     { href: "/console/tests", label: "Test center", Icon: FlaskConical, perm: "tests:run" },
   ] },
   { group: "Configure", items: [
     { href: "/console/users", label: "Users & roles", Icon: Users, perm: "users:manage" },
+    { href: "/console/integrations", label: "Slack & workspace", Icon: Hash, perm: "integrations:read" },
     { href: "/console/apps", label: "Connected apps", Icon: PlugZap, perm: "apps:manage" },
     { href: "/console/settings", label: "Settings", Icon: Settings2, perm: "settings:read" },
   ] },
 ];
 
 export function firstAllowed(can: (p: string) => boolean): string | null {
-  for (const g of NAV) for (const i of g.items) if (can(i.perm)) return i.href;
+  for (const g of NAV) for (const i of g.items) if (allowed(can, i.perm)) return i.href;
   return null;
 }
 
@@ -68,7 +75,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
       </div>
       <nav className="scrollbar-thin flex-1 space-y-6 overflow-y-auto px-3" aria-label="Console">
         {NAV.map((g) => {
-          const items = g.items.filter((i) => can(i.perm));
+          const items = g.items.filter((i) => allowed(can, i.perm));
           if (!items.length) return null;
           return (
             <div key={g.group}>

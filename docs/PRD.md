@@ -165,9 +165,127 @@ All thresholds above are stored as policy rules and are editable in Policy Studi
 | Reviewer bottleneck | Priority ordering, SLA aging, bulk filters; thresholds tunable to control volume |
 | Mock mode masks real-model behaviour | Provider abstraction; same guardrails run regardless of provider; docs explain the difference |
 
-## 11. Future roadmap
+## 11. Release 2 — governance at scale
 
-1. **Now+1:** pgvector-backed ANN retrieval; streaming responses with incremental output scanning.
-2. **Now+2:** SSO (OIDC) and SCIM provisioning; per-app policy scoping; reviewer assignment and load balancing.
-3. **Now+3:** Pluggable ML classifiers (fine-tuned injection detector, NLI-based contradiction checks) behind the same rule interface; shadow-mode policies that log without enforcing.
-4. **Later:** Multi-tenant control plane, SIEM export (Splunk / Sentinel), data-residency controls, policy-as-code GitOps sync.
+Release 1 proved the gateway. Release 2 makes it safe to *operate*: policy changes need a second pair of eyes, governance produces evidence an auditor accepts, the assistant meets employees in their team channels, and AI agents can act — but never without rules.
+
+### 11.1 Policy versioning and approval workflow
+
+**Why.** In Release 1 an admin edit went live instantly. A single typo in a regex could switch off card-number protection for the whole company. Regulated teams require change control: draft, review by someone else, deliberate activation, and the ability to roll back.
+
+**User stories**
+- As an admin, I draft a policy change and test it against real prompts without affecting anyone.
+- As a compliance approver, I see exactly what changed (diff), who asked, why, and the impact on the evaluation suite before I approve.
+- As an admin, I activate an approved version and know the previous one is archived, not lost.
+- As a security viewer, I can trace any decision back to the exact policy version that made it.
+
+**Acceptance criteria**
+- Versions follow `DRAFT → IN_REVIEW → APPROVED → ACTIVE → INACTIVE → ARCHIVED`, with `CHANGES_REQUESTED`/`REJECTED → DRAFT`.
+- Only the ACTIVE version is enforced (enforced by a partial unique index as well as code). Drafts, in-review and approved-but-inactive versions never affect traffic.
+- A version's snapshot is immutable once submitted; editing a live policy creates a new draft.
+- The author or submitter of a version cannot approve it (separation of duties).
+- Rollback creates a new version copied from a previously approved one; history is never rewritten.
+- Every transition writes a policy audit event mirrored into the hash-chained audit log; every rule match records the policy version.
+- Approvers can run an impact analysis that replays the evaluation suite with the draft in force.
+
+**Edge cases.** Concurrent activation (DB index rejects a second ACTIVE). Editing while in review (409). Approver who is also an admin (SoD still applies). Effective-from dates in the future (activation schedules enforcement). Archiving a policy with an open review (review withdrawn).
+
+**Policy exceptions** (needed for audit evidence): time-boxed (≤ 365 days), approved exemptions for a user, role or department. Requested exceptions have no effect until approved by someone other than the requester; expired exceptions stop applying automatically.
+
+### 11.2 Compliance Evidence Center
+
+**Why.** "Generate an audit-ready AI governance report in minutes, not weeks." Compliance teams spend weeks screenshotting dashboards. Evidence must be complete, scoped, and provably untampered.
+
+**User stories**
+- As a compliance lead, I generate a governance summary for last quarter scoped to Finance and HIGH/CRITICAL risk, and export it for the auditor.
+- As an auditor, I verify that a report I received matches the underlying records.
+- As a CISO, I get the same report every month without asking.
+
+**Acceptance criteria**
+- Five report types: AI Governance Summary, Sensitive Data Access, Human Oversight, Policy Change, Exception.
+- Filters: period, departments, policies, risk levels, reviewers; include/exclude reviews, policy changes, sensitive events.
+- Reports are immutable once READY (ORM guard), versioned per scope, hashed (SHA-256 of content), and list the audit-event IDs they were built from.
+- **Reproducible:** built only from append-only records in a half-open window `[start, end)`; *Verify integrity* regenerates and compares hashes.
+- Exports: Markdown, JSON evidence package (integrity block + source IDs), self-contained HTML.
+- Schedules (weekly/monthly) and retention (expiry → EXPIRED). Withdrawal hides a report but keeps the record; both are audited.
+- No raw sensitive values — entity types and counts only.
+
+**Edge cases.** Empty periods (sections say so explicitly). Events written in the same second as generation (excluded by the half-open window). Review cases escalated after the period (original priority/SLA are stored at creation so SLA evidence is stable).
+
+### 11.3 Slack integration (connected workspace)
+
+**Why.** Employees ask questions where they work. A side-channel bot that bypasses governance is the shadow-AI problem TrustShield exists to solve.
+
+**User stories**
+- As an employee, I ask in `#finance-help` and get the same governed answer, citations and trust status as the web assistant.
+- As an employee, when my question is held for review, the final answer is posted back to my thread.
+- As an admin, I map channels to policy profiles (e.g. Finance channels hold payment-instruction changes for review).
+
+**Acceptance criteria**
+- Built-in connected workspace works with no Slack credentials. Real Slack is enabled through environment variables and uses Slack Bolt's ASGI (FastAPI) adapter for signature verification and dispatch.
+- Every message goes through `gateway.process` — one enforcement path for web, workspace and Slack.
+- Slack users map to TrustShield users (linked identity or verified email); unlinked users are refused.
+- Idempotent on Slack retries (one processing per `event_id`); per-user rate limit; only masked text stored; tokens never logged or returned.
+- Others in a channel never see someone's refused or held request — it shows as withheld.
+- Channel policy profiles scope additional policies; unknown Slack channels are registered disabled until mapped.
+
+### 11.4 Agent action-approval controls
+
+**Why.** Assistants are becoming agents. An agent that can refund an invoice is a payment system with a chat interface. It must be governed like one.
+
+**User stories**
+- As a finance analyst, I ask the agent to refund a vendor invoice; small refunds complete, large ones wait for the Finance Head.
+- As the Finance Head, I approve with full context: target record, amount, policy basis, risk.
+- As security, I know no agent action ever executes without the required approval, and every step is audited.
+
+**Acceptance criteria**
+- Action taxonomy: READ, SENSITIVE_READ, CREATE, UPDATE, FINANCIAL_ACTION, COMMUNICATION, DESTRUCTIVE_ACTION, ADMIN_ACTION.
+- Decisions: EXECUTE, REQUIRE_APPROVAL, SEND_TO_REVIEW, ESCALATE, BLOCK (plus NEEDS_INFO when details are missing).
+- Configurable approval rules (amount thresholds, requester roles, external recipients); the most restrictive matching rule wins; risk ≥ 0.9 escalates.
+- Only the named approver role can decide; requesters cannot approve their own actions.
+- Executors validate input, permissions are re-checked at execution time, and a database index allows at most one successful execution per action. Request idempotency keys prevent duplicate actions.
+- Executor failures change nothing and can be retried; executed actions can be compensated.
+- Every transition writes an action audit event mirrored into the hash-chained log.
+
+### 11.5 Permissions matrix (Release 2)
+
+| Capability | Employee | HR Mgr | Finance Analyst | Finance Head | People Mgr | Compliance | Security Admin | Auditor | Admin |
+|---|---|---|---|---|---|---|---|---|---|
+| Assistant & connected workspace | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Request agent actions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Approve agent actions (own role only) | — | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — |
+| Read policies & history | — | — | — | — | — | ✓ | ✓ | ✓ | ✓ |
+| Draft / activate / roll back policies | — | — | — | — | — | — | — | — | ✓ |
+| Approve policy versions & exceptions | — | — | — | — | — | ✓ | — | — | ✓* |
+| Generate / schedule evidence reports | — | — | — | — | — | ✓ | — | — | ✓ |
+| Read evidence reports | — | — | — | ✓ | — | ✓ | — | ✓ | ✓ |
+| Slack settings & channel mapping | — | — | — | — | — | — | — | read | ✓ |
+| Agent Control Center | — | — | — | approvals | approvals | approvals | approvals | read | ✓ |
+
+\* The seeded admin also holds the compliance role, but separation of duties prevents approving their own changes.
+
+### 11.6 Success metrics (Release 2)
+
+| Metric | Target |
+|---|---|
+| Policy changes reaching production without a second approver | **0** (invariant) |
+| Median policy change lead time (draft → active) | < 1 day |
+| Time to produce a quarterly governance evidence pack | < 10 minutes |
+| Evidence reports that fail re-verification | **0** |
+| Share of channel AI traffic going through TrustShield vs. unmanaged bots | ≥ 95% |
+| Agent actions executed without required approval | **0** (invariant) |
+| Duplicate executions | **0** (DB-enforced) |
+
+### 11.7 Rollout plan
+
+1. **Policy workflow first** (migration converts existing policies into immutable ACTIVE versions, labelled "pre-workflow" approvals). Freeze direct edits the same day.
+2. **Evidence Center** for the compliance team; schedule monthly governance summaries.
+3. **Connected workspace** pilot in `#policy-questions`; then enable real Slack for one department with `SLACK_ENABLED=true`.
+4. **Agents** start read-only (READ / CREATE auto-execute) for two weeks; enable FINANCIAL and DESTRUCTIVE actions behind approval rules once approvers are trained.
+
+## 12. Future roadmap
+
+1. **Now+1:** pgvector-backed ANN retrieval; streaming responses with incremental output scanning; Slack modals for in-Slack approvals of agent actions.
+2. **Now+2:** SSO (OIDC) and SCIM provisioning; reviewer and approver delegation/out-of-office; per-app policy scoping.
+3. **Now+3:** Pluggable ML classifiers behind the same rule interface; shadow-mode policy versions (log without enforcing) as a lifecycle state; real system-of-record executors (Jira, NetSuite, Workday).
+4. **Later:** Multi-tenant control plane, SIEM export, signed evidence packages (detached signatures), policy-as-code GitOps sync.

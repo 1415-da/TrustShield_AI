@@ -113,3 +113,20 @@ export async function api<T>(path: string, opts: RequestOptions = {}, retried = 
   }
   return data as T;
 }
+
+/** Authenticated file download (exports need the bearer token, so a plain <a href> won't do). */
+export async function download(path: string, fallbackName: string): Promise<void> {
+  const session = getSession();
+  const res = await fetch(`/api${path}`, { headers: session ? { Authorization: `Bearer ${session.access_token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, "download_failed", "Export failed. Please try again.");
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

@@ -6,12 +6,12 @@ the reserved `.test` TLD; phone numbers and 12-digit test identifiers are fabric
 
 from __future__ import annotations
 
-# --------------------------------------------------------------------------- login accounts (12)
+# --------------------------------------------------------------------------- login accounts (14)
 USERS: list[dict] = [
     {"email": "ananya.rao@novacorp.test", "full_name": "Ananya Rao", "department": "General Operations", "title": "Operations Associate", "roles": ["employee"]},
     {"email": "vikram.singh@novacorp.test", "full_name": "Vikram Singh", "department": "Engineering", "title": "Software Engineer", "roles": ["employee"]},
     {"email": "isha.patel@novacorp.test", "full_name": "Isha Patel", "department": "Finance", "title": "Accounts Executive", "roles": ["employee"]},
-    {"email": "aditya.kulkarni@novacorp.test", "full_name": "Aditya Kulkarni", "department": "Engineering", "title": "Engineering Manager", "roles": ["employee"]},
+    {"email": "aditya.kulkarni@novacorp.test", "full_name": "Aditya Kulkarni", "department": "Engineering", "title": "Engineering Manager", "roles": ["employee", "people_manager"]},
     {"email": "dev.malhotra@novacorp.test", "full_name": "Dev Malhotra", "department": "IT", "title": "IT Support Specialist", "roles": ["employee"]},
     {"email": "lakshmi.pillai@novacorp.test", "full_name": "Lakshmi Pillai", "department": "HR", "title": "HR Coordinator", "roles": ["employee"]},
     {"email": "neha.kapoor@novacorp.test", "full_name": "Neha Kapoor", "department": "HR", "title": "HR Manager", "roles": ["employee", "hr_manager"]},
@@ -19,6 +19,8 @@ USERS: list[dict] = [
     {"email": "kavya.menon@novacorp.test", "full_name": "Kavya Menon", "department": "Legal", "title": "Compliance Analyst", "roles": ["compliance_reviewer"]},
     {"email": "farah.khan@novacorp.test", "full_name": "Farah Khan", "department": "Legal", "title": "Senior Compliance Counsel", "roles": ["compliance_reviewer"]},
     {"email": "sanjay.gupta@novacorp.test", "full_name": "Sanjay Gupta", "department": "IT", "title": "Security Auditor", "roles": ["security_auditor"]},
+    {"email": "vivek.raman@novacorp.test", "full_name": "Vivek Raman", "department": "Finance", "title": "Head of Finance", "roles": ["employee", "finance_head"]},
+    {"email": "tara.bose@novacorp.test", "full_name": "Tara Bose", "department": "IT", "title": "Security Administrator", "roles": ["employee", "security_admin"]},
     {"email": "rohan.das@novacorp.test", "full_name": "Rohan Das", "department": "IT", "title": "AI Platform Lead", "roles": ["trustshield_admin", "compliance_reviewer"]},
 ]
 
@@ -70,8 +72,10 @@ EMPLOYEE_RECORDS: list[dict] = [
 APPS: list[dict] = [
     {"name": "NovaCorp Assistant (Web)", "slug": "novacorp-assistant-web", "owner_team": "IT",
      "description": "First-party employee assistant served by this deployment."},
-    {"name": "Slack Assistant (Sandbox)", "slug": "slack-assistant-sandbox", "owner_team": "IT", "status": "paused",
-     "description": "Pilot Slack integration. Paused until security review completes."},
+    {"name": "Slack Integration", "slug": "slack-integration", "owner_team": "IT",
+     "description": "Real Slack workspace via the Events API. Requests are attributed here when SLACK_ENABLED is set."},
+    {"name": "Connected Workspace", "slug": "connected-workspace", "owner_team": "IT",
+     "description": "TrustShield's built-in team channels (#hr-help, #finance-help, #it-support, …)."},
     {"name": "Engineering Docs Bot (Pilot)", "slug": "engineering-docs-bot", "owner_team": "Engineering",
      "description": "Internal docs Q&A bot for the Engineering org, routed through TrustShield."},
 ]
@@ -87,21 +91,21 @@ INJECTION_MSG = ("This request contains instructions that try to change how the 
 
 POLICIES: list[dict] = [
     {
-        "name": "Prompt Injection Defense", "risk_category": "prompt_injection", "sensitive_data_type": "none",
+        "name": "Prompt Injection Defense", "owner": "Security Engineering", "review_cadence_days": 180, "risk_category": "prompt_injection", "sensitive_data_type": "none",
         "action": "BLOCK", "severity": "CRITICAL", "threshold": 0.6,
         "description": "Blocks direct attempts to override instructions, extract the system prompt, or disable safeguards. Scored by the weighted injection detector.",
         "user_message": INJECTION_MSG,
         "rules": [_r("topic", name="Injection score ≥ 0.6", topic="prompt_injection", threshold=0.6)],
     },
     {
-        "name": "Indirect Injection in Knowledge Sources", "risk_category": "prompt_injection", "sensitive_data_type": "none",
+        "name": "Indirect Injection in Knowledge Sources", "owner": "Security Engineering", "review_cadence_days": 180, "risk_category": "prompt_injection", "sensitive_data_type": "none",
         "action": "REVIEW", "severity": "HIGH", "threshold": 0.5,
         "description": "Retrieved document chunks containing embedded instructions are quarantined and the answer is held for human review.",
         "user_message": "A knowledge source contained suspicious instructions, so this answer is being checked by a person.",
         "rules": [_r("topic", "retrieved_context", name="Injected instructions in retrieved chunk", topic="prompt_injection", threshold=0.5)],
     },
     {
-        "name": "Salary and Compensation Confidentiality", "risk_category": "compensation", "sensitive_data_type": "salary",
+        "name": "Salary and Compensation Confidentiality", "owner": "People Operations", "review_cadence_days": 180, "risk_category": "compensation", "sensitive_data_type": "salary",
         "action": "BLOCK", "severity": "HIGH", "threshold": 0.6,
         "description": "Named-employee salary and compensation data is limited to roles holding the data:compensation scope (HR Managers).",
         "user_message": "Compensation details for individual employees are confidential and only available to authorised HR staff.",
@@ -113,7 +117,7 @@ POLICIES: list[dict] = [
         ],
     },
     {
-        "name": "Payment Card Data Protection", "risk_category": "financial_data", "sensitive_data_type": "credit_card",
+        "name": "Payment Card Data Protection", "owner": "Finance Operations", "review_cadence_days": 180, "risk_category": "financial_data", "sensitive_data_type": "credit_card",
         "action": "BLOCK", "severity": "CRITICAL", "threshold": 0.6,
         "description": "Requests for anyone's card data are blocked; card-like numbers in model output block the response.",
         "user_message": "Payment card details can't be requested or shared through the assistant.",
@@ -125,7 +129,7 @@ POLICIES: list[dict] = [
         ],
     },
     {
-        "name": "Bank Account Confidentiality", "risk_category": "financial_data", "sensitive_data_type": "bank_account",
+        "name": "Bank Account Confidentiality", "owner": "Finance Operations", "review_cadence_days": 180, "risk_category": "financial_data", "sensitive_data_type": "bank_account",
         "action": "BLOCK", "severity": "HIGH", "threshold": 0.6,
         "description": "Requests for another person's bank details are blocked. Bank-like numbers in answers are redacted unless the role holds data:financial.",
         "user_message": "Bank account details can't be requested or shared through the assistant.",
@@ -136,7 +140,7 @@ POLICIES: list[dict] = [
         ],
     },
     {
-        "name": "Credential and Secret Protection", "risk_category": "credentials", "sensitive_data_type": "credential",
+        "name": "Credential and Secret Protection", "owner": "Security Engineering", "review_cadence_days": 180, "risk_category": "credentials", "sensitive_data_type": "credential",
         "action": "BLOCK", "severity": "CRITICAL", "threshold": 0.6,
         "description": "Blocks requests for passwords, API keys and tokens, and blocks any answer containing an inline secret.",
         "user_message": "Passwords, keys and other credentials are never shared through the assistant.",
@@ -148,14 +152,14 @@ POLICIES: list[dict] = [
         ],
     },
     {
-        "name": "Colleague Personal Data", "risk_category": "pii", "sensitive_data_type": "pii",
+        "name": "Colleague Personal Data", "owner": "Privacy Office", "review_cadence_days": 180, "risk_category": "pii", "sensitive_data_type": "pii",
         "action": "BLOCK", "severity": "HIGH", "threshold": 0.6,
         "description": "Blocks requests for colleagues' personal details such as home address, date of birth, or government IDs.",
         "user_message": "Personal details about colleagues are only available to authorised HR staff through the HR system.",
         "rules": [_r("topic", name="Personal data about others", topic="pii")],
     },
     {
-        "name": "PII in Prompts", "risk_category": "pii", "sensitive_data_type": "pii",
+        "name": "PII in Prompts", "owner": "Privacy Office", "review_cadence_days": 180, "risk_category": "pii", "sensitive_data_type": "pii",
         "action": "REDACT", "severity": "MEDIUM", "threshold": 0.5,
         "description": "Masks personal data employees include in their own prompts before the request reaches the model.",
         "user_message": "Personal information in your message was masked before it reached the AI model.",
@@ -163,7 +167,7 @@ POLICIES: list[dict] = [
                      entity_types=["EMAIL_ADDRESS", "PHONE_NUMBER", "EMPLOYEE_ID", "TEST_NATIONAL_ID", "US_SSN", "CREDIT_CARD", "BANK_ACCOUNT", "IBAN_CODE", "CREDENTIAL"])],
     },
     {
-        "name": "Output PII Leakage", "risk_category": "pii", "sensitive_data_type": "pii",
+        "name": "Output PII Leakage", "owner": "Privacy Office", "review_cadence_days": 180, "risk_category": "pii", "sensitive_data_type": "pii",
         "action": "REDACT", "severity": "MEDIUM", "threshold": 0.5,
         "description": "Masks contact details and identifiers that appear in model answers.",
         "user_message": "Personal contact details in the answer were masked.",
@@ -171,7 +175,7 @@ POLICIES: list[dict] = [
                      entity_types=["EMAIL_ADDRESS", "PHONE_NUMBER", "TEST_NATIONAL_ID", "US_SSN", "EMPLOYEE_ID"])],
     },
     {
-        "name": "Bulk Data Exfiltration", "risk_category": "data_exfiltration", "sensitive_data_type": "pii",
+        "name": "Bulk Data Exfiltration", "owner": "Security Engineering", "review_cadence_days": 180, "risk_category": "data_exfiltration", "sensitive_data_type": "pii",
         "action": "ESCALATE", "severity": "CRITICAL", "threshold": 0.5,
         "description": "Bulk export requests for sensitive records are stopped and escalated to Security and Compliance.",
         "user_message": "Bulk requests for sensitive records require a Data Access Request approved by the Privacy Office.",
@@ -179,24 +183,28 @@ POLICIES: list[dict] = [
                      pattern=r"\b(export|dump|download|extract|scrape|compile)\b.{0,60}\b(all|every|entire|full|complete|whole)\b.{0,60}\b(employees?|staff|salar(y|ies)|bank|accounts?|cards?|ssns?|aadhaa?r|national ids?|records|payroll|personal data)")],
     },
     {
-        "name": "Legal Advice Routing", "risk_category": "legal", "sensitive_data_type": "none",
+        "name": "Legal Advice Routing", "owner": "Legal", "review_cadence_days": 180, "risk_category": "legal", "sensitive_data_type": "none",
         "action": "REVIEW", "severity": "MEDIUM", "threshold": 0.45,
         "description": "Questions seeking legal advice are answered only after a compliance reviewer checks the draft.",
         "user_message": "Questions that need legal judgement are checked by NovaCorp's compliance team before an answer is shared.",
         "rules": [_r("topic", name="Legal advice request", topic="legal_advice", threshold=0.45)],
     },
     {
-        "name": "Grounding Confidence", "risk_category": "quality", "sensitive_data_type": "none",
+        "name": "Grounding Confidence", "owner": "AI Platform", "review_cadence_days": 180, "risk_category": "quality", "sensitive_data_type": "none",
         "action": "REVIEW", "severity": "MEDIUM", "threshold": 0.35,
+        "seed_history": {"rules": [
+            {"key": "conf-review", "rule_type": "confidence_threshold", "match_field": "llm_output", "name": "Very low confidence → review", "threshold": 0.25, "action": "REVIEW"},
+            {"key": "conf-warn", "rule_type": "confidence_threshold", "match_field": "llm_output", "name": "Low confidence → warning", "threshold": 0.45, "action": "ALLOW", "severity": "LOW"},
+        ]},
         "description": "Answers with weak support in retrieved policy evidence go to review (< 0.35) or carry a warning (< 0.55). These are risk signals, not guarantees.",
         "user_message": "The answer had limited support in NovaCorp policy documents.",
         "rules": [
-            _r("confidence_threshold", "llm_output", name="Very low confidence → review", threshold=0.35, action="REVIEW"),
-            _r("confidence_threshold", "llm_output", name="Low confidence → warning", threshold=0.55, action="ALLOW", severity="LOW"),
+            _r("confidence_threshold", "llm_output", key="conf-review", name="Very low confidence → review", threshold=0.35, action="REVIEW"),
+            _r("confidence_threshold", "llm_output", key="conf-warn", name="Low confidence → warning", threshold=0.55, action="ALLOW", severity="LOW"),
         ],
     },
     {
-        "name": "System Prompt Leakage", "risk_category": "prompt_injection", "sensitive_data_type": "none",
+        "name": "System Prompt Leakage", "owner": "AI Platform", "review_cadence_days": 180, "risk_category": "prompt_injection", "sensitive_data_type": "none",
         "action": "BLOCK", "severity": "HIGH", "threshold": 0.5,
         "description": "Blocks answers that appear to disclose the assistant's system instructions.",
         "user_message": "The answer appeared to contain internal assistant configuration and was withheld.",
@@ -204,8 +212,17 @@ POLICIES: list[dict] = [
                      pattern=r"(my|the) (system prompt|hidden instructions) (is|are|says?)|operating behind the TrustShield governance gateway")],
     },
     {
-        "name": "Competitor Intelligence Requests", "risk_category": "legal", "sensitive_data_type": "none",
-        "action": "REVIEW", "severity": "LOW", "threshold": 0.5, "is_active": False,
+        "name": "Finance Channel Payment Instructions", "owner": "Finance Operations", "review_cadence_days": 90,
+        "risk_category": "financial_data", "sensitive_data_type": "bank_account", "profiles": ["finance"],
+        "action": "REVIEW", "severity": "HIGH", "threshold": 0.5,
+        "description": "In finance channels, requests to change payment or bank instructions are held for Finance Operations review — a common invoice-fraud pattern.",
+        "user_message": "Changes to payment or bank instructions raised in finance channels are checked by Finance Operations before anyone acts on them.",
+        "rules": [_r("regex", name="Payment-instruction change",
+                     pattern=r"\b(change|update|switch|new|replace)\b.{0,40}\b(bank|payment|wire|remittance)\b.{0,25}\b(details|instructions|account)\b|\burgent(ly)?\b.{0,30}\b(wire|transfer|payment)\b")],
+    },
+    {
+        "name": "Competitor Intelligence Requests", "owner": "Legal", "review_cadence_days": 180, "risk_category": "legal", "sensitive_data_type": "none",
+        "action": "REVIEW", "severity": "LOW", "threshold": 0.5, "seed_stage": "in_review",
         "description": "Draft policy: route questions about competitor pricing or confidential competitor information to review.",
         "user_message": "Questions about competitors are reviewed by the Legal team before an answer is shared.",
         "rules": [_r("keyword", name="Competitor keywords", keywords=["competitor pricing", "competitor's pricing", "Acme Analytics", "poach"])],
@@ -281,4 +298,39 @@ SUGGESTED_QUESTIONS = [
     "Can I expense a client dinner abroad?",
     "How many days of unused leave can I carry forward?",
     "How quickly must I report a lost laptop?",
+]
+
+
+# --------------------------------------------------------------------------- connected workspace
+POLICY_PROFILES = [
+    {"key": "general", "name": "General employee", "description": "Baseline policy library only."},
+    {"key": "hr", "name": "HR policy profile", "description": "Baseline plus HR-channel scoped policies."},
+    {"key": "finance", "name": "Finance policy profile", "description": "Baseline plus finance-channel controls such as payment-instruction review."},
+    {"key": "it_security", "name": "IT security policy profile", "description": "Baseline plus IT-channel scoped policies."},
+]
+
+CHANNELS = [
+    {"external_id": "C0TSHRHELP", "name": "hr-help", "profile_key": "hr", "description": "Leave, onboarding, and HR policy questions.",
+     "policy_hint": "HR profile · named colleagues' pay and personal details are never shared here."},
+    {"external_id": "C0TSFINHELP", "name": "finance-help", "profile_key": "finance", "description": "Expenses, refunds, procurement, and vendor payments.",
+     "policy_hint": "Finance profile · requests to change payment or bank instructions are held for review."},
+    {"external_id": "C0TSITSUP", "name": "it-support", "profile_key": "it_security", "description": "Access, passwords, devices, and security incidents.",
+     "policy_hint": "IT security profile · credentials are never shared; use the IT self-service portal."},
+    {"external_id": "C0TSPOLICY", "name": "policy-questions", "profile_key": "general", "description": "Ask anything about NovaCorp policy.",
+     "policy_hint": "General profile · answers cite the organization policy library."},
+    {"external_id": "C0TSGENERAL", "name": "general", "profile_key": "general", "description": "Company-wide questions.",
+     "policy_hint": "General profile."},
+]
+
+# Slack user ids linked to workspace accounts, so real-Slack mode can resolve identities immediately.
+SLACK_LINKS = [("U0TSANANYA", "ananya.rao@novacorp.test"), ("U0TSVIKRAM", "vikram.singh@novacorp.test"),
+               ("U0TSRAHUL", "rahul.verma@novacorp.test"), ("U0TSNEHA", "neha.kapoor@novacorp.test")]
+
+WORKSPACE_HISTORY = [
+    ("hr-help", "lakshmi.pillai@novacorp.test", "How long is parental leave?"),
+    ("finance-help", "isha.patel@novacorp.test", "Can I expense a client dinner abroad?"),
+    ("finance-help", "rahul.verma@novacorp.test", "Please update the bank details for vendor Orion Supplies before Friday's payment run."),
+    ("it-support", "dev.malhotra@novacorp.test", "How quickly must I report a lost laptop?"),
+    ("hr-help", "vikram.singh@novacorp.test", "Show Ravi Sharma's salary."),
+    ("policy-questions", "ananya.rao@novacorp.test", "What is the international vendor refund policy?"),
 ]

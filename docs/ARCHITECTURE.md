@@ -71,7 +71,10 @@ Invariant: step 5 is unreachable when step 3 short-circuits. This is asserted in
 | `app/services/evaluation.py` | Test harness runner and FP/FN scoring |
 | `app/services/simulation.py` | Dry-run simulator, including inactive or unsaved draft policies |
 | `app/seed/` | Synthetic NovaCorp data (users, directory, policies, documents, 49 test cases) |
-| `app/workers/tasks.py` | FastAPI background tasks (reindex, test runs) |
+| `app/workers/tasks.py` | FastAPI background tasks (reindex, test runs, report generation, due schedules) |
+| `app/services/evidence.py` | Compliance report builders, hashing, verification, exports, schedules |
+| `app/services/workspace.py`, `slack_bolt_app.py` | Connected-workspace / Slack adapter core and the Bolt app |
+| `app/services/agent_actions.py`, `action_executors.py` | Agent action classification, policy evaluation, approvals, controlled executors |
 
 ## 4. Data model
 
@@ -122,11 +125,101 @@ These are heuristics. The product labels them as risk signals and routes low sco
 - **Audit immutability:** ORM `before_update`/`before_delete` guards and a PostgreSQL trigger reject modification; `prev_hash`/`event_hash` chain allows verification (`GET /api/admin/audit-events/verify`).
 - **Token storage trade-off:** the MVP stores JWTs in `localStorage` for simplicity. Production should use httpOnly, SameSite cookies.
 
-## 7. Deployment
+## 7. Release 2 architecture
 
-`docker compose up --build` starts `db` (postgres:15-alpine), `backend` (runs `alembic upgrade head`, seeds if empty, starts uvicorn), and `frontend` (Next.js standalone). No Redis/Celery: background work uses FastAPI `BackgroundTasks`.
+### 7.1 Policy versioning
 
-## 8. Key trade-offs
+```
+policies (family: name, owner, cadence, active_version_id)
+   └─< policy_versions (immutable snapshot JSON, status, created/approved/activated by, effective window)
+          ├─< policy_approvals (PENDING → APPROVED | CHANGES_REQUESTED | REJECTED, impact analysis cache)
+          └── policy_comments
+policy_audit_events (every transition) ──mirrored──► audit_events (hash chain)
+policy_exceptions (user | role | department, time-boxed, approved by a second person)
+
+Enforcement: gateway → policies.active_snapshots()
+              = versions WHERE status='ACTIVE' AND effective window covers now
+              − policies exempted for this actor by APPROVED, unexpired exceptions
+              + (simulation only) a forced draft/inactive version replacing its family
+```
+
+Guarantees and where they live:
+
+| Guarantee | Mechanism |
+|---|---|
+| One live version per policy | Partial unique index `uq_one_active_version` (Postgres and SQLite) + service activates new / archives old in one transaction |
+| Submitted versions never change | `before_update` ORM guard on `snapshot` unless the previous status is editable |
+| Second-person approval | `services.policies.decide` rejects the author/submitter (403) |
+| Traceability | Every `RuleMatch` carries `policy_version`; audit details list `policy_id:vN` |
+| Safe migration | `0002` converts each pre-workflow policy into an ACTIVE/INACTIVE version labelled "(pre-workflow)" and drops the mutable columns afterwards |
+
+### 7.2 Compliance evidence
+
+```
+POST /compliance/reports ──► compliance_reports (GENERATING) ──BackgroundTask──► evidence.build(type, filters)
+                                                                                     │ reads only append-only sources
+                                                     audit_events · guardrail_decisions · review_actions ·
+                                                     policy_audit_events · review_cases (creation-time fields)
+                                                                                     ▼
+                                      content (summary, metrics, sections) + SHA-256 + source audit-event ids → READY
+GET /verify ──► rebuild from the same window [start, end) ──► compare hashes
+Scheduler (asyncio loop in FastAPI lifespan, 60 s) ──► report_schedules due → new immutable report
+```
+
+Reproducibility rests on three choices: the window is half-open and ends on a whole second; mutable rows are never read (review SLAs use `initial_priority`/`initial_sla_due_at` captured at creation; exception status is reconstructed from lifecycle events); and the content excludes generation time. A READY report's content, hash, filters and sources are protected by an ORM guard; only expiry and withdrawal (both audited) are allowed.
+
+### 7.3 Slack adapter
+
+```
+ Slack ──HTTPS──► /api/integrations/slack/events ──► Slack Bolt (FastAPI/ASGI adapter)
+                                                     • verifies X-Slack-Signature + timestamp (replay window)
+                                                     • answers url_verification
+                                                     • dispatches message / app_mention
+                                                           │
+ Built-in workspace UI ──► /api/workspace/channels/{id}/messages
+                                                           ▼
+                                   services.workspace.handle_message(Inbound)
+                                   • idempotency on event_id (redelivery → deliveries += 1, no reprocessing)
+                                   • identity: SlackIdentity link → users.info email → TrustShield user
+                                   • channel enabled? per-user rate limit?
+                                   • gateway.process(actor + channel policy profile)   ◄── same pipeline as web chat
+                                   • slack_events row (masked text, decision, request id)
+                                                           ▼
+                           Notifier.post (Slack Web API) · reviewer decision → on_message_updated → thread update
+```
+
+Security boundaries: Slack tokens live only in backend env vars and are never logged or returned (status reports which variables are *missing*, not values). Bolt is constructed with a static `authorize` function, so no per-request `auth.test` call is needed. Unknown Slack channels are recorded **disabled**. Refused or held requests are hidden from other channel members.
+
+Failure modes: Slack not configured → events endpoint returns `200 {"status":"not_configured"}` (no retry storm) and the workspace keeps working. Gateway exception → event `FAILED`, retryable from the admin page using the stored masked text. Slack API errors on delivery are logged and do not affect the decision record.
+
+### 7.4 Agent action controls
+
+```
+POST /agent/actions ─► input guardrails on the request text (injection, PII masking)
+                    ─► classify (deterministic intent parser → action type, target record, amount, external?)
+                    ─► agent allowed for this action type? ─► requester holds required permission?
+                    ─► action_policies (conditions: amount bounds, requester roles, external) → most restrictive wins
+                    ─► risk score (category + amount + external + bulk wording + injection) ≥ 0.9 ⇒ ESCALATE
+                    ─► EXECUTE | REQUIRE_APPROVAL(role) | SEND_TO_REVIEW | ESCALATE | BLOCK | NEEDS_INFO
+approve (named role, never the requester) ─► execute()
+execute(): status APPROVED|FAILED → re-check requester permission → executor.validate → executor.execute
+           → action_executions (partial unique index: one SUCCEEDED per action) → EXECUTED | FAILED
+every transition → action_audit_events → audit_events (hash chain); conversation message kept in sync
+```
+
+| Risk | Control |
+|---|---|
+| Agent acts without approval | `execute()` refuses any status other than APPROVED/FAILED; approval requires the exact role |
+| Duplicate payment | Request idempotency key (unique per user) + DB-enforced single successful execution |
+| Privilege change after approval | Permissions re-checked immediately before execution (→ BLOCKED) |
+| Prompt injection into an action request | Same input guardrails as chat; injection → BLOCK |
+| Downstream failure mid-action | Executors raise before changing state; FAILED is retryable; executed actions support compensation |
+
+## 8. Deployment
+
+`docker compose up --build` starts `db` (postgres:15-alpine), `backend` (runs `alembic upgrade head`, seeds an empty database or applies idempotent reference-data upgrades to an existing one, starts uvicorn), and `frontend` (Next.js standalone). No Redis/Celery: background work uses FastAPI `BackgroundTasks` and a small lifespan scheduler loop.
+
+## 9. Key trade-offs
 
 | Decision | Why | Cost |
 |---|---|---|
@@ -135,3 +228,7 @@ These are heuristics. The product labels them as risk signals and routes low sco
 | Mask user messages at rest | Strong privacy default | Employees see masked versions of their own past messages |
 | Single gateway service | Simple to deploy and reason about | Guardrail and admin APIs scale together |
 | SQLite in unit tests | Fast, hermetic CI | Postgres-only features (trigger) tested via ORM guard instead |
+| Policy snapshots as JSON (no normalised rule table) | Immutable versions, trivial diffs and hashing | Rule-level SQL queries need JSON operators |
+| Reports from append-only sources only | Reproducible, verifiable evidence | Some mutable context (e.g. current department) is approximated by values captured at request time |
+| In-process scheduler | No Celery/Redis | One backend replica should run the scheduler (set `SCHEDULER_ENABLED=false` on others) |
+| Deterministic action classifier | Explainable, testable, offline | Narrower language coverage than an LLM planner; unknown requests ask for more information |

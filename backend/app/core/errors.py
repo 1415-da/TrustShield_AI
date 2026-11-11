@@ -30,6 +30,11 @@ class Conflict(AppError):
         super().__init__(409, "conflict", message)
 
 
+class Forbidden(AppError):
+    def __init__(self, message: str) -> None:
+        super().__init__(403, "forbidden", message)
+
+
 class BadRequest(AppError):
     def __init__(self, message: str) -> None:
         super().__init__(400, "bad_request", message)
@@ -67,4 +72,4 @@ def install_error_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=500, content=_body(request, "internal_error", "An unexpected error occurred"))
 
 
-__all__ = ["AppError", "NotFound", "Conflict", "BadRequest", "HTTPException", "install_error_handlers"]
+__all__ = ["AppError", "NotFound", "Conflict", "Forbidden", "BadRequest", "HTTPException", "install_error_handlers"]

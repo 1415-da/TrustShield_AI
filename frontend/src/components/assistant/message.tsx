@@ -3,6 +3,7 @@
 import { BookOpen, ChevronDown, Hourglass, Info, ShieldCheck, UserRound } from "lucide-react";
 import { useState } from "react";
 
+import { ActionCard } from "@/components/assistant/action-card";
 import { TrustBadge } from "@/components/trust/badges";
 import { ENTITY_LABELS, timeAgo } from "@/lib/format";
 import type { ChatMessage, Citation, Explanation } from "@/lib/types";
@@ -110,6 +111,14 @@ export function MessageView({ message }: { message: ChatMessage }) {
         <div className="max-w-[85%] rounded-[22px] rounded-br-md bg-ink px-4 py-2.5 text-[14.5px] leading-relaxed text-cream sm:max-w-[75%]">
           {inline(message.content)}
         </div>
+      </div>
+    );
+  }
+  if (message.action_id) {
+    return (
+      <div className="flex gap-3 animate-rise" data-testid="assistant-message" data-trust={message.trust_status ?? "needs_review"}>
+        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-forest-50 text-forest"><ShieldCheck className="h-4 w-4" /></div>
+        <div className="min-w-0 flex-1"><ActionCard actionId={message.action_id} /></div>
       </div>
     );
   }

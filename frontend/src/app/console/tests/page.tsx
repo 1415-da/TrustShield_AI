@@ -70,7 +70,7 @@ export default function TestCenterPage() {
             <Stat label="Pass rate" value={done ? pct(run.summary.pass_rate) : "…"} sub={done ? `${run.passed} / ${run.total}` : "running"} tone="forest" />
             <Stat label="False positives" value={done ? run.false_positives : "…"} sub={done ? `rate ${pct(run.summary.false_positive_rate, 1)} of ${run.summary.safe_cases} safe` : ""} />
             <Stat label="False negatives" value={done ? run.false_negatives : "…"} sub={done ? `rate ${pct(run.summary.false_negative_rate, 1)} of ${run.summary.restrictive_cases} risky` : ""} tone={done && run.false_negatives ? "crimson" : undefined} />
-            <Stat label="Avg latency" value={done ? `${Math.round(run.summary.avg_latency_ms ?? 0)}ms` : "…"} sub="per scenario, mock model" />
+            <Stat label="Avg latency" value={done ? `${Math.round(run.summary.avg_latency_ms ?? 0)}ms` : "…"} sub="per scenario, offline model" />
             <div className="border-l border-hair pl-4">
               <p className="eyebrow">Run</p>
               <Select aria-label="Select run" className="mt-2" value={runId ?? ""} onChange={(e) => setRunId(Number(e.target.value))}>

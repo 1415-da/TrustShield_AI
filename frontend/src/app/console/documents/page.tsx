@@ -72,7 +72,7 @@ export default function DocumentsPage() {
                   <FileText className="h-5 w-5 shrink-0 text-forest" strokeWidth={1.6} />
                   <button onClick={() => setViewId(d.id)} className="min-w-0 flex-1 text-left">
                     <p className="truncate font-medium hover:text-forest">{d.title}</p>
-                    <p className="text-[12px] text-ink-500">{d.filename} · {d.chunk_count} chunks · {d.source === "seed" ? "seeded" : "uploaded"} {timeAgo(d.created_at)}</p>
+                    <p className="text-[12px] text-ink-500">{d.filename} · {d.chunk_count} chunks · {d.source === "seed" ? "policy library" : "uploaded"} {timeAgo(d.created_at)}</p>
                   </button>
                   <div className="flex items-center gap-2">
                     {d.trust_level === "untrusted" && <Badge tone="amber">Untrusted source</Badge>}

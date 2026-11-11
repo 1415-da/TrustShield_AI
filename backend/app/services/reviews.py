@@ -89,6 +89,14 @@ def _act(db: Session, c: ReviewCase, reviewer: User, action: str, note: str, edi
     )
 
 
+def _notify_channels(db: Session, c: ReviewCase) -> None:
+    """If the held answer came from the connected workspace or Slack, push the final response to that thread."""
+    if c.assistant_message_id:
+        from app.services import workspace
+
+        workspace.on_message_updated(db, c.assistant_message_id)
+
+
 def _resolve(c: ReviewCase, reviewer: User, status: str, final: str) -> None:
     c.status, c.final_response, c.resolved_by, c.resolved_at = status, final, reviewer.id, clock()
 
@@ -111,6 +119,7 @@ def approve(db: Session, c: ReviewCase, reviewer: User, note: str = "") -> Revie
     _deliver(db, c, text, trust, "approved", citations)
     _act(db, c, reviewer, "APPROVE", note)
     db.commit()
+    _notify_channels(db, c)
     db.refresh(c)
     return c
 
@@ -127,6 +136,7 @@ def edit(db: Session, c: ReviewCase, reviewer: User, edited_response: str, note:
     _deliver(db, c, safe, "redacted" if ents else "verified", "edited")
     _act(db, c, reviewer, "EDIT", note + (f" [{len(ents)} sensitive value(s) auto-masked]" if ents else ""), edited=safe)
     db.commit()
+    _notify_channels(db, c)
     db.refresh(c)
     return c
 
@@ -137,6 +147,7 @@ def reject(db: Session, c: ReviewCase, reviewer: User, note: str = "") -> Review
     _deliver(db, c, gateway.FALLBACK_REJECTED, "blocked", "rejected", citations=[])
     _act(db, c, reviewer, "REJECT", note)
     db.commit()
+    _notify_channels(db, c)
     db.refresh(c)
     return c
 

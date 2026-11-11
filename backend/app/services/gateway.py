@@ -103,8 +103,9 @@ class GatewayResult:
         return self.input_stage.redaction_count + (self.output_stage.redaction_count if self.output_stage else 0)
 
 
-def actor_from_user(user: User) -> Actor:
-    return Actor(user.id, user.email, set(user.role_keys), set(user.permissions), user.primary_role)
+def actor_from_user(user: User, profile: str | None = None) -> Actor:
+    return Actor(user.id, user.email, set(user.role_keys), set(user.permissions), user.primary_role,
+                 department=user.department or "", profile=profile)
 
 
 # --------------------------------------------------------------------------- helpers
@@ -204,13 +205,21 @@ def process(
     provider: LLMProvider | None = None,
     now: datetime | None = None,
     source: str = "assistant",
+    title: str | None = None,
 ) -> GatewayResult:
     t0 = time.perf_counter()
     request_id = uuid.uuid4().hex
     snapshots = policies.active_snapshots(db, include=extra_policies)
+    # Approved, unexpired policy exceptions exempt this actor (a simulated draft policy is never exempted).
+    exempt = policies.exempt_policy_ids(db, email=actor.email, roles=actor.roles, department=actor.department)
+    focus_ids = {p.id for p in extra_policies or []}
+    exempted = sorted(s.name for s in snapshots if s.id in exempt and s.id not in focus_ids)
+    snapshots = [s for s in snapshots if s.id not in exempt or s.id in focus_ids]
     engine = GuardrailEngine(snapshots, get_pii_detector(), directory.directory_names(db))
 
     inp = engine.run_input(prompt, actor)
+    if exempted:
+        inp.stage.signals["exceptions_applied"] = exempted
     input_action = InputAction(inp.stage.action)
     context_stage = output_stage = None
     grounding = None
@@ -267,8 +276,16 @@ def process(
     result.latency_ms = round((time.perf_counter() - t0) * 1000, 1)
     if persist:
         _persist(db, result, actor=actor, prompt=prompt, app=app, conversation_id=conversation_id,
-                 now=now or utcnow(), source=source, review_sources=citations)
+                 now=now or utcnow(), source=source, review_sources=citations, title=title)
     return result
+
+
+def mask_text(text: str) -> str:
+    """Mask high-risk identifiers in free text (used when a message is stored without running the full pipeline)."""
+    from app.guardrails.types import STORAGE_MASKED_ENTITIES
+
+    pii = get_pii_detector()
+    return pii.anonymize(text, [e for e in pii.analyze(text) if e.entity_type in STORAGE_MASKED_ENTITIES])
 
 
 def _block_text(matches: list[RuleMatch]) -> str:
@@ -280,11 +297,11 @@ def _block_text(matches: list[RuleMatch]) -> str:
 # --------------------------------------------------------------------------- persistence
 def _persist(
     db: Session, r: GatewayResult, *, actor: Actor, prompt: str, app: ConnectedApp | None,
-    conversation_id: int | None, now: datetime, source: str, review_sources: list[dict],
+    conversation_id: int | None, now: datetime, source: str, review_sources: list[dict], title: str | None = None,
 ) -> None:
     conv = db.get(Conversation, conversation_id) if conversation_id else None
     if conv is None or conv.user_id != actor.user_id:
-        title = r.sanitized_prompt.strip().replace("\n", " ")
+        title = title or r.sanitized_prompt.strip().replace("\n", " ")
         conv = Conversation(user_id=actor.user_id, app_id=app.id if app else None,
                             title=(title[:72] + "…") if len(title) > 72 else title, created_at=now, updated_at=now)
         db.add(conv)
@@ -333,6 +350,7 @@ def _persist(
             sources=review_sources, signals={"grounding": r.grounding.public() if r.grounding else None,
                                              "input": r.input_stage.signals.get("topics", {})},
             sla_due_at=now + timedelta(hours=SLA_HOURS.get(severity, 8)), created_at=now,
+            initial_priority=severity, initial_sla_due_at=now + timedelta(hours=SLA_HOURS.get(severity, 8)),
         )
         db.add(case)
         db.flush()
@@ -353,6 +371,10 @@ def _persist(
             "confidence": r.grounding.confidence if r.grounding else None,
             "rules": [f"{m.policy_name} › {m.rule_name}" for m in r.all_matches][:12],
             "quarantined_sources": r.context_stage.signals.get("quarantined", 0) if r.context_stage else 0,
+            "department": actor.department or None,
+            "channel_profile": actor.profile,
+            "exceptions_applied": r.input_stage.signals.get("exceptions_applied", []),
+            "policy_versions": sorted({f"{m.policy_id}:v{m.policy_version}" for m in r.all_matches}),
         },
     )
     db.commit()

@@ -33,7 +33,10 @@ export const ROLE_LABELS: Record<string, string> = {
   employee: "Employee",
   hr_manager: "HR Manager",
   finance_analyst: "Finance Analyst",
+  finance_head: "Finance Head",
+  people_manager: "People Manager",
   compliance_reviewer: "Compliance Reviewer",
+  security_admin: "Security Admin",
   security_auditor: "Security / Audit",
   trustshield_admin: "TrustShield Admin",
 };
@@ -45,7 +48,7 @@ export const ENTITY_LABELS: Record<string, string> = {
   BANK_ACCOUNT: "Bank account",
   IBAN_CODE: "IBAN",
   US_SSN: "SSN-like ID",
-  TEST_NATIONAL_ID: "Test national ID",
+  TEST_NATIONAL_ID: "National ID number",
   EMPLOYEE_ID: "Employee ID",
   SALARY_AMOUNT: "Salary figure",
   CREDENTIAL: "Credential",
@@ -56,6 +59,19 @@ export const ENTITY_LABELS: Record<string, string> = {
 /** Replace masked placeholders like <EMAIL_ADDRESS> with readable text for compact UI (titles, lists). */
 export function readableMasks(s: string): string {
   return s.replace(/<([A-Z_]+)>/g, (_, t: string) => `[${(ENTITY_LABELS[t] ?? t).toLowerCase()}]`);
+}
+
+export const PROFILE_LABELS: Record<string, string> = {
+  general: "General employee", hr: "HR", finance: "Finance", it_security: "IT security",
+};
+
+export function shortDate(iso: string | null | undefined): string {
+  return iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
+}
+
+export function money(amount: number | null | undefined, currency: string | null | undefined = "INR"): string {
+  if (amount === null || amount === undefined) return "—";
+  return `${currency ?? "INR"} ${amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
 export function humanize(s: string): string {

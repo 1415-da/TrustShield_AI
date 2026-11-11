@@ -1,4 +1,4 @@
-"""Synthetic people directory used to (a) detect prompts that target named employees and (b) supply
+"""Employee directory (developer note: seeded rows are synthetic) used to (a) detect prompts that target named employees and (b) supply
 role-appropriate directory facts to the model. Salary bands are only included for callers holding the
 `data:compensation` scope; test national IDs are never included."""
 
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import EmployeeRecord
 
-DIRECTORY_TITLE = "NovaCorp People Directory (synthetic)"
+DIRECTORY_TITLE = "NovaCorp Employee Directory"
 
 
 def directory_names(db: Session) -> list[str]:
@@ -34,5 +34,5 @@ def describe(record: EmployeeRecord, permissions: set[str]) -> str:
     ]
     if "data:compensation" in permissions:
         lines += [f"Salary band: {record.salary_band}", f"Salary range: {record.salary_range}"]
-    lines.append("Record type: synthetic test data")
+    lines.append("Record type: employee directory entry")
     return "\n".join(lines)

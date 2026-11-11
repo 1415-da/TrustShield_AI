@@ -7,6 +7,8 @@ export const USERS = {
   reviewer: "kavya.menon@novacorp.test",
   admin: "rohan.das@novacorp.test",
   auditor: "sanjay.gupta@novacorp.test",
+  finance: "rahul.verma@novacorp.test",
+  financeHead: "vivek.raman@novacorp.test",
 };
 
 export async function login(page: Page, email: string): Promise<void> {

@@ -27,6 +27,14 @@ const ACTION_TONE: Record<string, BadgeTone> = {
   REVIEW: "amber", SEND_TO_REVIEW: "amber", SHOW_WITH_WARNING: "amber", PENDING: "amber", needs_review: "amber",
   BLOCK: "crimson", REJECTED: "crimson", REJECT: "crimson", blocked: "crimson",
   ESCALATE: "ink", ESCALATED: "ink",
+  // policy lifecycle
+  DRAFT: "neutral", IN_REVIEW: "amber", CHANGES_REQUESTED: "amber", ACTIVE: "sage", INACTIVE: "neutral",
+  ARCHIVED: "neutral", WITHDRAWN: "neutral", REQUESTED: "amber", REVOKED: "neutral", EXPIRED: "neutral",
+  // reports & integrations & agent actions
+  READY: "sage", GENERATING: "amber", FAILED: "crimson", PROCESSED: "sage", RECEIVED: "amber", DUPLICATE: "neutral",
+  RATE_LIMITED: "amber", REJECTED_UNLINKED: "crimson", EXECUTE: "sage", EXECUTED: "sage", REQUIRE_APPROVAL: "amber",
+  PENDING_APPROVAL: "amber", NEEDS_INFO: "lilac", INFO_REQUESTED: "lilac", BLOCKED: "crimson", EXECUTING: "amber", COMPENSATED: "lilac",
+  SUCCEEDED: "sage",
 };
 
 export function ActionBadge({ action, className }: { action: string | null | undefined; className?: string }) {

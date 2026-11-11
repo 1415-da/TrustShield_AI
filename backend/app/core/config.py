@@ -42,6 +42,20 @@ class Settings(BaseSettings):
     presidio_enabled: bool = True
     spacy_model: str = "en_core_web_sm"
 
+    # Slack (optional). With these unset the built-in connected workspace still works.
+    slack_enabled: bool = False
+    slack_bot_token: str = ""
+    slack_signing_secret: str = ""
+    slack_app_token: str = ""
+    slack_verification_token: str = ""
+    slack_workspace_name: str = ""
+    workspace_rate_limit_per_minute: int = 20
+    public_app_url: str = "http://localhost:3000"
+
+    # Background scheduler (compliance report schedules)
+    scheduler_enabled: bool = True
+    scheduler_interval_seconds: int = 60
+
     # HTTP
     cors_origins: str = "http://localhost:3000"
 

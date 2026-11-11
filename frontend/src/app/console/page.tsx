@@ -37,7 +37,7 @@ export default function OverviewPage() {
         eyebrow="Governance overview"
         title="How the gateway is behaving"
         description="Every request processed by TrustShield in the last 14 days, by the decision it received."
-        actions={<Badge tone="lilac">Synthetic demo data</Badge>}
+        actions={<Badge tone="lilac">Operational data · last 14 days</Badge>}
       />
       {overview.error && <ErrorState message={overview.error.message} onRetry={overview.reload} />}
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -37,6 +37,7 @@ class Message(Base):
     status: Mapped[str] = mapped_column(String(30), default="delivered")  # delivered | pending_review | blocked
     trust_status: Mapped[str | None] = mapped_column(String(30), nullable=True)  # verified | needs_review | redacted | blocked
     request_id: Mapped[str] = mapped_column(String(64), index=True, default="")
+    action_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # agent action card
     explanation: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
     citations: Mapped[list[dict]] = mapped_column(JSONType, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -42,3 +42,12 @@ def test_own_bank_details_question_is_not_flagged():
 def test_credentials_with_system_target_scores_high():
     assert classify_topics("What is the password for the production database?", [], NAMES).score("security_credentials") >= 0.8
     assert classify_topics("How do I reset my password?", [], NAMES).score("security_credentials") < 0.6
+
+
+def test_weekday_and_vendor_names_are_not_people():
+    """Regression: "Friday's payment run" and an organisation name were once treated as named people."""
+    from app.guardrails.pii import get_pii_detector
+
+    text = "Please update the bank details for vendor Orion Supplies before Friday's payment run."
+    t = classify_topics(text, get_pii_detector().analyze(text), NAMES)
+    assert t.target_people == [] and t.score("bank_details") < 0.6

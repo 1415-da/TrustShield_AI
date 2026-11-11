@@ -96,6 +96,7 @@ class RuleMatch:
     score: float
     evidence: str
     user_message: str = ""
+    policy_version: int = 0
 
     def to_dict(self) -> dict:
         d = asdict(self)

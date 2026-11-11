@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -23,7 +25,22 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from app.guardrails.pii import get_pii_detector
 
     get_pii_detector()
+    loop = asyncio.create_task(_scheduler()) if settings.scheduler_enabled else None
     yield
+    if loop:
+        loop.cancel()
+
+
+async def _scheduler() -> None:
+    """Minimal in-process scheduler for compliance report schedules (no Celery/Redis at MVP scale)."""
+    from app.workers.tasks import run_due_schedules
+
+    while True:
+        await asyncio.sleep(settings.scheduler_interval_seconds)
+        try:
+            await asyncio.to_thread(run_due_schedules)
+        except Exception:  # pragma: no cover - logged, never fatal
+            logging.getLogger("trustshield.scheduler").exception("scheduled report run failed")
 
 
 app = FastAPI(

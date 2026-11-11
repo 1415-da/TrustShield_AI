@@ -8,8 +8,8 @@ from __future__ import annotations
 import logging
 
 from app.core.database import SessionLocal
-from app.models import Document, TestRun
-from app.services import documents, evaluation
+from app.models import ComplianceReport, Document, TestRun
+from app.services import documents, evaluation, evidence
 
 log = logging.getLogger("trustshield.workers")
 
@@ -35,3 +35,15 @@ def run_test_suite(run_id: int, case_ids: list[int] | None = None) -> None:
         run = db.get(TestRun, run_id)
         if run is not None:
             evaluation.execute_run(db, run, case_ids)
+
+
+def generate_report(report_id: int) -> None:
+    with SessionLocal() as db:
+        report = db.get(ComplianceReport, report_id)
+        if report is not None and report.status == "GENERATING":
+            evidence.generate(db, report)
+
+
+def run_due_schedules() -> int:
+    with SessionLocal() as db:
+        return len(evidence.run_due_schedules(db))

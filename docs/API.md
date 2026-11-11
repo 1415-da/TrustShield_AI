@@ -13,7 +13,7 @@ Base path: `/api`. Interactive OpenAPI docs: **`/api/docs`** (Swagger UI) and `/
 
 Codes: `unauthorized` 401, `forbidden` 403, `not_found` 404, `conflict` 409, `validation_error` 422 (with `details`), `bad_request` 400, `llm_unavailable` 502, `internal_error` 500.
 
-**Permissions** (the required one is listed per endpoint): `assistant:use`, `reviews:read`, `reviews:act`, `policies:read`, `policies:write`, `documents:read`, `documents:write`, `analytics:read`, `audit:read`, `users:manage`, `apps:manage`, `tests:run`, `settings:read`. Data scopes `data:compensation` and `data:financial` don't gate any endpoint. They change what the guardrails allow a user to see.
+**Permissions** (the required one is listed per endpoint): `assistant:use`, `reviews:read`, `reviews:act`, `policies:read`, `policies:write`, `policies:approve`, `documents:read`, `documents:write`, `analytics:read`, `audit:read`, `users:manage`, `apps:manage`, `tests:run`, `settings:read`, `compliance:read`, `compliance:write`, `integrations:read`, `integrations:manage`, `actions:request`, `actions:approve`, `agents:read`, `agents:manage`. Scopes `data:compensation`, `data:financial`, `actions:finance`, `actions:hr`, `actions:it` don't gate endpoints; they change what guardrails allow a user to see or which agent actions they may initiate.
 
 ---
 
@@ -72,40 +72,60 @@ Response:
 | GET | `/assistant/conversations/{id}` | Conversation with messages. 404 if it isn't yours |
 | GET | `/assistant/messages/{id}/sources` | Citations for one of your messages |
 
-## Policies
+## Policies — versions, approvals, exceptions
+
+A policy is a *family*; its behaviour lives in immutable **versions**. Only the `ACTIVE` version is enforced.
+Lifecycle: `DRAFT → IN_REVIEW → APPROVED → ACTIVE → INACTIVE → ARCHIVED`, with `CHANGES_REQUESTED | REJECTED → DRAFT`.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/admin/policies` | policies:read | Non-archived policies with rules |
-| GET | `/admin/policies/catalogue` | policies:read | Rule types, match fields, actions, severities, topics, entity types |
-| POST | `/admin/policies` | policies:write | Create. Writes version 1 and an audit event |
-| GET | `/admin/policies/{id}` | policies:read | |
-| GET | `/admin/policies/{id}/versions` | policies:read | Full JSON snapshot per version |
-| PATCH | `/admin/policies/{id}` | policies:write | Partial update. `rules` replaces the rule set. Optional `change_summary`. Bumps the version |
-| DELETE | `/admin/policies/{id}` | policies:write | Soft delete (archive). History is kept. 204 |
-| POST | `/admin/policies/{id}/activate` | policies:write | |
-| POST | `/admin/policies/{id}/deactivate` | policies:write | |
-| POST | `/admin/policies/{id}/simulate` | policies:read | Runs with this policy **forced active** |
-| POST | `/admin/simulate` | policies:read | Runs against the live policies. Can include an unsaved `draft_policy` |
+| GET | `/admin/policies` | policies:read | Families with status, live version, working version status, owner, next review |
+| GET | `/admin/policies/catalogue` | policies:read | Rule types, match fields, actions, severities, topics, entity types, channel profiles |
+| POST | `/admin/policies` | policies:write | Create family + **v1 DRAFT** (never live). 201 → detail |
+| GET | `/admin/policies/{id}` | policies:read | Detail: `active` version, `working` version, version summaries |
+| PATCH | `/admin/policies/{id}` | policies:write | Alias of POST `/versions` (save draft) |
+| DELETE | `/admin/policies/{id}` | policies:write | Archive the family (live version deactivated, open review withdrawn). 204 |
+| GET | `/admin/policies/{id}/versions` | policies:read | All versions, newest first, with snapshots |
+| GET | `/admin/policies/{id}/versions/{vid}?compare_to=active\|previous\|<vid>` | policies:read | Version + structured **diff** + approval record |
+| POST | `/admin/policies/{id}/versions` | policies:write | Save the working draft, or start a new draft from the head version. 409 while a version is IN_REVIEW/APPROVED |
+| POST | `/admin/policies/{id}/submit-for-review` | policies:write | `{note}` → version IN_REVIEW + pending approval |
+| POST | `/admin/policies/{id}/approve` | policies:approve | `{note}`. **403** if you authored or submitted the version (separation of duties) |
+| POST | `/admin/policies/{id}/request-changes` | policies:approve | `{note}` required (400 without) |
+| POST | `/admin/policies/{id}/reject` | policies:approve | `{note}` required |
+| POST | `/admin/policies/{id}/activate` | policies:write | `{version_id?, note}` — approved (or previously approved inactive) version goes live; previous live version → ARCHIVED. 409 if not approved |
+| POST | `/admin/policies/{id}/deactivate` | policies:write | `{note}` → INACTIVE |
+| POST | `/admin/policies/{id}/rollback` | policies:write | `{version_id, note, activate}` → **new** version copied from a previously approved one. 201 |
+| POST | `/admin/policies/{id}/simulate` | policies:read | `{prompt, role, profile?, version_id?, include_output}` — runs with that version (default: working draft) forced in. `{suite: true}` runs the **impact analysis** |
+| GET | `/admin/policies/{id}/audit-history` | policies:read | Every lifecycle event (each mirrored in `audit_events`, see `audit_event_id`) |
+| GET/POST | `/admin/policies/{id}/comments` | read / write or approve | `{body, version_id?}` |
+| GET | `/admin/policy-approvals?status=PENDING\|all` | policies:read | Approval inbox |
+| POST | `/admin/simulate` | policies:read | Live policies, optional unsaved `draft_policy`, optional `profile` |
+| GET | `/admin/policy-exceptions` | policies:read | Exceptions with `is_expired` |
+| POST | `/admin/policy-exceptions` | policies:write | `{policy_id, subject_type: user\|role\|department, subject, justification, starts_at?, expires_at}` (≤ 365 days) |
+| POST | `/admin/policy-exceptions/{id}/approve` / `reject` | policies:approve | Requester cannot decide their own |
+| POST | `/admin/policy-exceptions/{id}/revoke` | policies:write | |
 
-Policy body:
+Version body (all of these are captured in the immutable snapshot):
 
 ```json
 {
-  "name": "Project Unicorn Confidentiality", "description": "…", "risk_category": "legal",
-  "sensitive_data_type": "none", "applicable_roles": [], "action": "BLOCK", "severity": "MEDIUM",
-  "threshold": 0.5, "user_message": "Project Unicorn is confidential.", "is_active": false,
-  "rules": [
-    { "name": "Codename", "rule_type": "keyword", "match_field": "user_input", "keywords": ["unicorn"] },
-    { "rule_type": "role_permission", "match_field": "llm_output", "entity_types": ["SALARY_AMOUNT"],
-      "required_permission": "data:compensation", "threshold": 0.7, "action": "REDACT" }
-  ]
+  "name": "Project Unicorn Confidentiality", "description": "…", "risk_category": "legal", "owner": "Legal",
+  "review_cadence_days": 90, "effective_from": null, "effective_to": null, "sensitive_data_type": "none",
+  "applicable_roles": [], "profiles": [], "action": "BLOCK", "severity": "HIGH", "threshold": 0.5,
+  "user_message": "Project Unicorn is confidential.",
+  "rules": [{ "key": "kw", "name": "Codename", "rule_type": "keyword", "match_field": "user_input", "keywords": ["unicorn"] }]
 }
 ```
 
-Rule validation: `regex` needs a valid `pattern`; `keyword` needs `keywords`; `pii_entity` needs `entity_types`; `topic` needs `topic`; `role_permission` needs `required_permission` plus `topic` or `entity_types`; `confidence_threshold` must use `match_field: "llm_output"`.
+Diff response (`GET …/versions/{vid}`):
 
-Simulation body: `{ "prompt": "…", "role": "employee", "include_output": true, "draft_policy": { …optional… } }`. The response contains `input`, `context`, and `output` stages (each with action, risk, matches with masked evidence, and signals), plus `final` (decisions, `llm_called`, response preview) and `focus_policy` (`triggered`, `matches`).
+```json
+{ "diff": { "fields": [{ "field": "threshold", "before": 0.5, "after": 0.8 }],
+            "rules_added": [{ "name": "Ticket ids", "rule_type": "regex", "pattern": "\\bUNI-\\d+\\b", "…": "…" }],
+            "rules_removed": [],
+            "rules_changed": [{ "key": "kw", "name": "Codename", "changes": [{ "field": "action", "before": null, "after": "REVIEW" }] }],
+            "has_changes": true } }
+```
 
 ## Documents
 
@@ -170,6 +190,92 @@ Event types include `assistant.request`, `assistant.provider_error`, `auth.login
 | POST | `/admin/apps/{id}/keys` | apps:manage | `{name}`. Returns the plaintext `key` **once**. Only a SHA-256 hash is stored |
 | POST | `/admin/apps/{id}/keys/{key_id}/revoke` | apps:manage | 204 |
 | GET | `/admin/settings` | settings:read | Effective provider, model, embedding, PII engine, auth settings. Never includes secrets |
+
+## Compliance Evidence Center
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/compliance/options` | compliance:read | Report types, departments, policies, risk levels, reviewers |
+| POST | `/compliance/reports` | compliance:write | Generate (202, `GENERATING` → `READY`/`FAILED` in the background) |
+| GET | `/compliance/reports?report_type=&status=&include_withdrawn=` | compliance:read | Library |
+| GET | `/compliance/reports/{id}` | compliance:read | Envelope + content |
+| GET | `/compliance/reports/{id}/preview` | compliance:read | `{integrity, content}`; 409 unless READY/EXPIRED |
+| GET | `/compliance/reports/{id}/verify` | compliance:read | Regenerates from the same records: `{stored_hash, regenerated_hash, reproducible}` |
+| GET | `/compliance/reports/{id}/export?format=markdown\|json\|html` | compliance:read | Attachment download; export is audited |
+| POST | `/compliance/reports/{id}/schedule` | compliance:write | `{cadence: weekly\|monthly, retention_days?}` |
+| DELETE | `/compliance/reports/{id}` | compliance:write | Withdraw from the library (record retained, audited). 204 |
+| GET | `/compliance/evidence/{id}/sources?page=&page_size=` | compliance:read | The audit events the report was built from |
+| GET | `/compliance/schedules` · DELETE `/compliance/schedules/{id}` | read / write | |
+| POST | `/compliance/schedules/run-due` | compliance:write | Run due schedules now (the scheduler does this every minute) |
+
+Generate request:
+
+```json
+{ "report_type": "governance_summary", "period_start": "2026-10-01T00:00:00Z", "period_end": "2026-11-01T00:00:00Z",
+  "departments": ["Finance"], "policy_ids": [], "risk_levels": ["HIGH", "CRITICAL"], "reviewers": [],
+  "include_reviews": true, "include_policy_changes": true, "include_sensitive_events": true, "retention_days": 365 }
+```
+
+`report_type` ∈ `governance_summary | sensitive_data | human_oversight | policy_changes | exceptions`. Content shape: `{report_type, title, period, filters, summary[], metrics[{label, value}], sections[{title, columns, rows, description, empty}], evidence{audit_events, source_hash, statement}}`.
+
+## Slack integration and connected workspace
+
+Slack-facing (signed by Slack; no TrustShield auth):
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/integrations/slack/events` | Events API via Slack Bolt (signature + timestamp verified; `url_verification` answered). When Slack is not configured: `200 {"ok": false, "status": "not_configured"}` |
+| POST | `/integrations/slack/interactions` | Interactive components (the "View in TrustShield" button) |
+
+Admin:
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/integrations/slack/status` | integrations:read | Mode (`connected \| disabled \| not_configured`), missing env var *names*, required scopes, event counts. Never returns secrets |
+| POST | `/integrations/slack/test` | integrations:manage | Calls `auth.test` when configured; otherwise reports the workspace health |
+| GET | `/integrations/slack/channels` | integrations:read | Channels + policy profiles |
+| PATCH | `/integrations/slack/channels/{id}` | integrations:manage | `{profile_key?, is_enabled?, policy_hint?, description?}` |
+| GET | `/integrations/slack/events?status=&source=&limit=` | integrations:read | Delivery log (masked text, decision, deliveries, attempts, errors) |
+| POST | `/integrations/slack/retry/{event_id}` | integrations:manage | Reprocess a FAILED event (409 otherwise) |
+
+Employee-facing workspace (`assistant:use`):
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/workspace/channels` | Enabled internal channels with policy hints |
+| GET | `/workspace/channels/{id}/messages` | Feed. Others' refused/held messages: `{withheld: true, text: null, reply: {kind: "private"}}` |
+| POST | `/workspace/channels/{id}/messages` | `{text, client_msg_id?}` — `client_msg_id` is the idempotency key. 201 → feed item with TrustShield's reply |
+
+## Agent actions
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/agent/actions` | actions:request | `{request}` (natural language) or `{action_type, params}`; optional `idempotency_key` (or `Idempotency-Key` header), `conversation_id`, `record_in_conversation`. Replays return the original with `idempotent_replay: true` |
+| GET | `/agent/actions?scope=mine\|approvals` | actions:request (+ actions:approve for approvals) | `approvals` = waiting for one of your roles, excluding your own requests |
+| GET | `/agent/actions/{id}` | requester, matching approver, or agents:read | Detail incl. approvals, executions, employee view |
+| POST | `/agent/actions/{id}/approve` | actions:approve + required role | Approves **and executes**. 403 for the wrong role or your own request |
+| POST | `/agent/actions/{id}/reject` | actions:approve + role | `{note}` required |
+| POST | `/agent/actions/{id}/request-info` | actions:approve + role | `{note}` required → `NEEDS_INFO` |
+| POST | `/agent/actions/{id}/escalate` | actions:approve + role | → `ESCALATED` for Security Admin |
+| POST | `/agent/actions/{id}/execute` | requester or agents:manage | Runs/retries an `APPROVED` or `FAILED` action. 409 if not approved or already executed |
+| POST | `/agent/actions/{id}/compensate` | agents:manage | Reverse an executed action via the executor's compensation step |
+| GET | `/admin/agent/actions?status=&category=` | agents:read | All actions |
+| GET | `/admin/agent/actions/{id}/audit` | agents:read | Every transition (each mirrored in `audit_events`) |
+| GET | `/admin/agent/summary` · `/admin/agent/catalog` | agents:read | Counts; agents and action types |
+| GET | `/admin/agent/action-policies` | agents:read | Approval rules |
+| POST | `/admin/agent/action-policies` | agents:manage | `{name, action_type? \| category?, conditions{amount_gt/gte/lt/lte, requester_roles, external}, decision, approver_role?, priority}` |
+| PATCH | `/admin/agent/action-policies/{id}` | agents:manage | Partial update; audited |
+
+Example:
+
+```bash
+curl -s localhost:8000/api/agent/actions -H "authorization: Bearer $FINANCE" -H 'content-type: application/json' \
+  -H 'Idempotency-Key: refund-inv-2291' -d '{"request":"Issue a refund for vendor invoice INV-2291"}' | jq '{status, decision, required_approver_role, amount, employee_view}'
+# → { "status": "PENDING_APPROVAL", "decision": "REQUIRE_APPROVAL", "required_approver_role": "finance_head", "amount": 18000,
+#     "employee_view": { "headline": "This action requires approval from Finance Head.", "eta": "Within 1 business day", … } }
+```
+
+Error codes added in Release 2: `403 forbidden` for separation-of-duties and wrong-approver-role, `409 conflict` for invalid lifecycle transitions (activating an unapproved version, executing an unapproved or already-executed action, acting on a resolved item).
 
 ## Example: curl session
 

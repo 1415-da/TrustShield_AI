@@ -33,7 +33,7 @@ export function Hero() {
               View live product <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
             </Link>
           </div>
-          <p className="mt-6 text-[13px] text-ink-500">Self-hosted · OpenAI-compatible · Works offline with a deterministic mock model</p>
+          <p className="mt-6 text-[13px] text-ink-500">Self-hosted · OpenAI-compatible · Runs fully offline with a deterministic built-in model</p>
         </div>
 
         <div className="animate-rise [animation-delay:120ms]">

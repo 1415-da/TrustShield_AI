@@ -45,30 +45,40 @@ class PolicySnapshot:
     applicable_roles: tuple[str, ...]
     is_active: bool
     rules: tuple[RuleSnapshot, ...]
+    version: int = 0
+    profiles: tuple[str, ...] = ()  # channel policy profiles this policy is scoped to; empty = everywhere
 
     @classmethod
-    def from_model(cls, policy: Any) -> "PolicySnapshot":
+    def from_definition(cls, policy_id: int, definition: dict[str, Any], version: int = 0, active: bool = True) -> "PolicySnapshot":
+        """Build an enforceable snapshot from a version's immutable definition dict."""
         return cls(
-            id=policy.id,
-            name=policy.name,
-            risk_category=policy.risk_category,
-            action=policy.action,
-            severity=policy.severity,
-            threshold=policy.threshold,
-            user_message=policy.user_message or "",
-            applicable_roles=tuple(policy.applicable_roles or ()),
-            is_active=policy.is_active,
+            id=policy_id,
+            name=definition["name"],
+            risk_category=definition.get("risk_category", "other"),
+            action=definition["action"],
+            severity=definition.get("severity", "MEDIUM"),
+            threshold=float(definition.get("threshold", 0.5)),
+            user_message=definition.get("user_message") or "",
+            applicable_roles=tuple(definition.get("applicable_roles") or ()),
+            is_active=active,
+            version=version,
+            profiles=tuple(definition.get("profiles") or ()),
             rules=tuple(
                 RuleSnapshot(
-                    id=r.id, name=r.name or r.rule_type, rule_type=r.rule_type, match_field=r.match_field,
-                    pattern=r.pattern, keywords=tuple(r.keywords or ()), entity_types=tuple(r.entity_types or ()),
-                    topic=r.topic, required_permission=r.required_permission, threshold=r.threshold,
-                    action=r.action, severity=r.severity, applies_to_roles=tuple(r.applies_to_roles or ()),
-                    is_active=r.is_active,
+                    id=i + 1, name=r.get("name") or r["rule_type"], rule_type=r["rule_type"],
+                    match_field=r.get("match_field", "user_input"), pattern=r.get("pattern"),
+                    keywords=tuple(r.get("keywords") or ()), entity_types=tuple(r.get("entity_types") or ()),
+                    topic=r.get("topic"), required_permission=r.get("required_permission"), threshold=r.get("threshold"),
+                    action=r.get("action"), severity=r.get("severity"), applies_to_roles=tuple(r.get("applies_to_roles") or ()),
+                    is_active=r.get("is_active", True),
                 )
-                for r in policy.rules
+                for i, r in enumerate(definition.get("rules") or [])
             ),
         )
+
+    @classmethod
+    def from_version(cls, version: Any) -> "PolicySnapshot":
+        return cls.from_definition(version.policy_id, version.snapshot, version.version, active=True)
 
 
 @dataclass
@@ -86,6 +96,7 @@ class EvaluationContext:
     roles: set[str]
     permissions: set[str]
     fields: dict[str, FieldAnalysis]
+    profile: str | None = None  # channel policy profile (e.g. "finance") for workspace / Slack traffic
 
 
 def _roles_apply(required: tuple[str, ...], roles: set[str]) -> bool:
@@ -163,6 +174,7 @@ def evaluate_rule(policy: PolicySnapshot, rule: RuleSnapshot, ctx: EvaluationCon
         score=score,
         evidence=evidence,
         user_message=policy.user_message,
+        policy_version=policy.version,
     )
 
 
@@ -170,6 +182,8 @@ def evaluate_policies(policies: list[PolicySnapshot], ctx: EvaluationContext, ma
     matches: list[RuleMatch] = []
     for policy in policies:
         if not policy.is_active or not _roles_apply(policy.applicable_roles, ctx.roles):
+            continue
+        if policy.profiles and ctx.profile not in policy.profiles:
             continue
         for rule in policy.rules:
             if not rule.is_active or rule.match_field != match_field or not _roles_apply(rule.applies_to_roles, ctx.roles):

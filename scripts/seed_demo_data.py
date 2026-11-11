@@ -28,7 +28,7 @@ from sqlalchemy import text  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.database import SessionLocal, engine  # noqa: E402
-from app.seed.loader import is_seeded, seed_all  # noqa: E402
+from app.seed.loader import ensure_upgrades, is_seeded, seed_all  # noqa: E402
 
 
 def reset_database() -> None:
@@ -51,7 +51,7 @@ def main() -> int:
     with SessionLocal() as db:
         if is_seeded(db):
             if args.if_empty:
-                print("[seed] database already seeded — skipping")
+                print("[seed] database already seeded — applying reference-data upgrades:", json.dumps(ensure_upgrades(db, get_settings().demo_user_password)))
                 return 0
             print("[seed] database already contains data; use --reset to start over", file=sys.stderr)
             return 1

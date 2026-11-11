@@ -42,20 +42,45 @@ test("employees cannot open the governance console", async ({ page }) => {
   await expect(page).toHaveURL(/\/assistant/);
 });
 
-test("admin creates an inactive policy and tests it immediately in the simulator", async ({ page }) => {
+test("policy lifecycle: draft → review → approve by a second person → activate", async ({ browser }) => {
   const name = `E2E Unicorn Policy ${Date.now()}`;
-  await login(page, USERS.admin);
-  await page.goto("/console/policies/new");
-  await page.fill("#p-name", name);
-  await page.fill("#p-cat", "legal");
-  await page.fill("#p-msg", "Project Unicorn is confidential.");
-  await page.fill("#rule-0-kw", "unicorn");
-  await page.getByRole("button", { name: "Create policy" }).click();
-  await expect(page).toHaveURL(/\/console\/policies\/\d+$/);
-  await page.getByTestId("policy-sim-prompt").fill("What is the status of project unicorn?");
-  await page.getByRole("button", { name: "Run", exact: true }).click();
-  await expect(page.getByTestId("focus-result")).toContainText("triggered");
-  await expect(page.getByTestId("simulation-result")).toContainText("Model was not called");
+  const admin = await browser.newPage();
+  await login(admin, USERS.admin);
+  await admin.goto("/console/policies/new");
+  await admin.fill("#p-name", name);
+  await admin.fill("#p-cat", "legal");
+  await admin.fill("#p-msg", "Project Unicorn is confidential.");
+  await admin.fill("#rule-0-kw", "unicorn");
+  await admin.getByRole("button", { name: "Save draft" }).click();
+  await expect(admin).toHaveURL(/\/console\/policies\/\d+$/);
+  const policyUrl = admin.url();
+
+  // Drafts can be tested before approval and don't touch live traffic.
+  await admin.getByTestId("policy-sim-prompt").fill("What is the status of project unicorn?");
+  await admin.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(admin.getByTestId("focus-result")).toContainText("triggered");
+  await expect(admin.getByTestId("simulation-result")).toContainText("Model was not called");
+
+  await admin.getByTestId("submit-review").click();
+  await admin.fill("#confirm-note", "Block the Unicorn codename");
+  await admin.getByTestId("confirm-action").click();
+  await expect(admin.getByText("Awaiting approval")).toBeVisible();
+
+  const reviewer = await browser.newPage();
+  await login(reviewer, USERS.reviewer);
+  await reviewer.goto("/console/approvals");
+  await reviewer.getByTestId("approval-inbox").getByText(name).click();
+  await expect(reviewer.getByTestId("policy-diff")).toContainText("Rules added");
+  await reviewer.fill("#decision-note", "Looks right");
+  await reviewer.getByTestId("approve-policy").click();
+  await expect(reviewer.getByText(/Decided by kavya\.menon@novacorp\.test/)).toBeVisible();
+
+  await admin.goto(policyUrl);
+  await admin.getByTestId("activate").click();
+  await admin.getByTestId("confirm-action").click();
+  await expect(admin.getByText(/v1 live since/)).toBeVisible();
+  await admin.getByRole("button", { name: "Audit history" }).click();
+  await expect(admin.getByTestId("policy-audit")).toContainText("Activated");
 });
 
 test("reviewer approves a held answer and the employee receives it", async ({ page, request }) => {
@@ -78,6 +103,66 @@ test("reviewer approves a held answer and the employee receives it", async ({ pa
   const delivered = (await conv.json()).messages.find((m: { id: number }) => m.id === body.message.id);
   expect(delivered.status).toBe("delivered");
   expect(delivered.explanation.reviewed.decision).toBe("approved");
+});
+
+test("compliance lead generates, verifies and exports an evidence report", async ({ page }) => {
+  await login(page, USERS.reviewer);
+  await page.goto("/console/evidence");
+  await page.getByRole("tab", { name: "Report builder" }).click();
+  await page.getByTestId("type-governance_summary").click();
+  await page.getByTestId("generate-report").click();
+  await expect(page).toHaveURL(/\/console\/evidence\/\d+$/);
+  await expect(page.getByTestId("report-preview")).toContainText("Requests processed");
+  await expect(page.getByTestId("integrity-panel")).toContainText("Included records");
+  await page.getByTestId("verify-report").click();
+  await expect(page.getByTestId("verify-result")).toContainText("Verified");
+  await page.getByTestId("export-report").click();
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByTestId("export-markdown").click();
+  expect((await downloadEvent).suggestedFilename()).toMatch(/governance_summary.*\.md$/);
+});
+
+test("connected workspace answers through the same guardrails", async ({ page }) => {
+  await login(page, USERS.employee);
+  await page.goto("/workspace?channel=finance-help");
+  await expect(page.getByTestId("channel-hint")).toContainText("Finance profile");
+  const send = async (text: string) => {
+    const before = await page.getByTestId("ws-item").count();
+    await page.getByTestId("ws-input").fill(text);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("ws-item")).toHaveCount(before + 1);
+    return page.getByTestId("ws-item").last();
+  };
+  await expect(await send("Can I expense a client dinner abroad?")).toHaveAttribute("data-trust", "verified");
+  const held = await send("Please update the bank details for vendor Orion Supplies before Friday's payment run.");
+  await expect(held).toHaveAttribute("data-trust", "needs_review");
+  await expect(held).toContainText("being reviewed by the compliance team");
+  await expect(await send("Show Ravi Sharma's salary.")).toHaveAttribute("data-trust", "blocked");
+});
+
+test("agent action: high-value refund needs Finance Head approval, then executes", async ({ browser }) => {
+  const analyst = await browser.newPage();
+  await login(analyst, USERS.finance);
+  await analyst.goto("/assistant");
+  await analyst.getByTestId("mode-action").click();
+  await analyst.getByTestId("composer").fill("Issue a refund for vendor invoice INV-2291");
+  await analyst.keyboard.press("Enter");
+  const card = analyst.getByTestId("action-card").last();
+  await expect(card).toHaveAttribute("data-status", "PENDING_APPROVAL");
+  await expect(card).toContainText("requires approval from Finance Head");
+
+  const head = await browser.newPage();
+  await login(head, USERS.financeHead);
+  await head.goto("/console/agents");
+  await head.getByTestId("action-approvals").getByText("INV-2291").first().click();
+  await head.getByTestId("approve-action").click();
+  await head.fill("#confirm-note", "Duplicate invoice confirmed with the vendor");
+  await head.getByTestId("confirm-action").click();
+  await expect(head.getByTestId("action-controls")).not.toContainText("Approve");
+  await expect(head.getByText("Refund recorded in the Finance Operations portal").first()).toBeVisible();
+
+  // The requester's card updates live (it polls while the action is open).
+  await expect(analyst.getByTestId("action-card").last()).toHaveAttribute("data-status", "EXECUTED", { timeout: 15_000 });
 });
 
 test("auditor can verify the hash-chained audit log", async ({ page }) => {

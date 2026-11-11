@@ -69,4 +69,4 @@ export function homeFor(user: User): string {
   return "/console";
 }
 
-export const CONSOLE_PERMISSIONS = ["analytics:read", "policies:read", "reviews:read", "audit:read", "users:manage", "apps:manage", "tests:run", "settings:read"];
+export const CONSOLE_PERMISSIONS = ["analytics:read", "policies:read", "reviews:read", "audit:read", "users:manage", "apps:manage", "tests:run", "settings:read", "compliance:read", "agents:read", "integrations:read", "actions:approve"];

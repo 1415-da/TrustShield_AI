@@ -57,7 +57,9 @@ class User(Base):
     @property
     def primary_role(self) -> str:
         """The most privileged role, used for display and audit attribution."""
-        order = ["trustshield_admin", "security_auditor", "compliance_reviewer", "hr_manager", "finance_analyst", "employee"]
+        from app.core.permissions import ROLE_ORDER
+
+        order = ROLE_ORDER
         keys = self.role_keys
         for key in order:
             if key in keys:
@@ -69,7 +71,7 @@ class User(Base):
 
 
 class EmployeeRecord(Base):
-    """Synthetic HR directory. Every row is fake test data (is_test_data is always true)."""
+    """HR directory used for people lookups. Developer note: every seeded row is synthetic (is_test_data=True)."""
 
     __tablename__ = "employee_records"
 

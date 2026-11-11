@@ -149,9 +149,9 @@ def gateway_settings(_: User = Depends(can_settings)) -> dict:
     s = get_settings()
     provider = get_provider()
     return {
-        "llm": {"configured_provider": s.llm_provider, "effective_provider": provider.name, "model": provider.model,
+        "llm": {"configured_provider": "offline" if s.llm_provider == "mock" else s.llm_provider, "effective_provider": provider.name, "model": provider.model,
                 "api_key_configured": bool(s.openai_api_key), "base_url_configured": bool(s.openai_base_url),
-                "offline_mock": provider.name == "mock"},
+                "offline_mode": provider.name == "offline"},
         "embeddings": {"provider": get_embedder().name, "retrieval_top_k": s.retrieval_top_k,
                        "vector_store": "PostgreSQL JSON + in-process cosine (pgvector on roadmap)"},
         "pii": {"engine": get_pii_detector().engine_name, "spacy_model": s.spacy_model},

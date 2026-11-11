@@ -20,6 +20,7 @@ class MessageOut(ORMModel):
     status: str
     trust_status: str | None
     request_id: str
+    action_id: int | None = None
     explanation: dict[str, Any] | None = None
     citations: list[dict[str, Any]] = []
     created_at: UTCDatetime

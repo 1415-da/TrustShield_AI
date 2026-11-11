@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { EB_Garamond, Figtree } from "next/font/google";
 
+import { ToastProvider } from "@/components/ui/toast";
 import { AuthProvider } from "@/hooks/useAuth";
 import "@/styles/globals.css";
 
@@ -19,7 +20,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-forest focus:px-4 focus:py-2 focus:text-cream">
           Skip to content
         </a>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

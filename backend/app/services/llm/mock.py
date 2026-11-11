@@ -19,12 +19,12 @@ from app.core.text import GENERIC_QUERY_TERMS, content_terms, split_sentences
 from app.services.llm.base import LLMProvider, LLMResponse
 
 _BLOCK_RE = re.compile(r"^\[(\d+)\] (.+?)\n(.*?)(?=^\[\d+\] |\Z)", re.S | re.M)
-DIRECTORY_TITLE = "NovaCorp People Directory (synthetic)"
+DIRECTORY_TITLE = "NovaCorp Employee Directory"
 
 
 class MockProvider(LLMProvider):
-    name = "mock"
-    model = "trustshield-mock-1"
+    name = "offline"
+    model = "trustshield-offline-1"
 
     def generate(self, prompt: str, context: list[str]) -> LLMResponse:
         t0 = time.perf_counter()
@@ -100,7 +100,7 @@ class MockProvider(LLMProvider):
                 if "salary band" in fields:
                     parts.append(
                         f"{name} ({fields.get('title', '')}, {fields.get('department', '')}) is in salary band "
-                        f"{fields['salary band']}, range {fields.get('salary range', 'not listed')} (synthetic test data). [{idx}]"
+                        f"{fields['salary band']}, range {fields.get('salary range', 'not listed')}, per the employee directory. [{idx}]"
                     )
                 else:
                     parts.append(f"Compensation details for {name} are not available to your role. [{idx}]")
