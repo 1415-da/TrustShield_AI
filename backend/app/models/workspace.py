@@ -4,31 +4,34 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+from app.models.organization import TenantMixin
 from app.models.base import utcnow
 
 
-class PolicyProfile(Base):
+class PolicyProfile(TenantMixin, Base):
     """A named channel policy profile. Policies list the profiles they are scoped to (empty = everywhere)."""
 
     __tablename__ = "policy_profiles"
+    __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_policy_profiles_key_per_org"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    key: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    key: Mapped[str] = mapped_column(String(40), index=True)
     name: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
-class WorkspaceChannel(Base):
+class WorkspaceChannel(TenantMixin, Base):
     __tablename__ = "workspace_channels"
+    __table_args__ = (UniqueConstraint("organization_id", "external_id", name="uq_workspace_channels_external_id_per_org"), UniqueConstraint("organization_id", "name", name="uq_workspace_channels_name_per_org"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    external_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # Slack channel id (or internal id)
-    name: Mapped[str] = mapped_column(String(80), unique=True)
+    external_id: Mapped[str] = mapped_column(String(64), index=True)  # Slack channel id (or internal id)
+    name: Mapped[str] = mapped_column(String(80))
     description: Mapped[str] = mapped_column(Text, default="")
     policy_hint: Mapped[str] = mapped_column(Text, default="")
     profile_key: Mapped[str] = mapped_column(String(40), default="general")
@@ -38,7 +41,7 @@ class WorkspaceChannel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-class SlackIdentity(Base):
+class SlackIdentity(TenantMixin, Base):
     """Maps a Slack user to a TrustShield user (linked by verified email)."""
 
     __tablename__ = "slack_identities"
@@ -50,7 +53,7 @@ class SlackIdentity(Base):
     linked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
-class SlackEvent(Base):
+class SlackEvent(TenantMixin, Base):
     """One inbound message (built-in workspace or Slack). `event_id` is the idempotency key. Text is stored masked."""
 
     __tablename__ = "slack_events"

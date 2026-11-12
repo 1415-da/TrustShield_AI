@@ -2,19 +2,21 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.organization import TenantMixin
 from app.models.base import utcnow
 
 
-class ConnectedApp(Base):
+class ConnectedApp(TenantMixin, Base):
     __tablename__ = "connected_apps"
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_connected_apps_name_per_org"), UniqueConstraint("organization_id", "slug", name="uq_connected_apps_slug_per_org"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(200), unique=True)
-    slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    slug: Mapped[str] = mapped_column(String(80), index=True)
     description: Mapped[str] = mapped_column(Text, default="")
     owner_team: Mapped[str] = mapped_column(String(120), default="IT")
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | paused
@@ -23,7 +25,7 @@ class ConnectedApp(Base):
     keys: Mapped[list["ApiKey"]] = relationship(back_populates="app", cascade="all, delete-orphan", lazy="selectin")
 
 
-class ApiKey(Base):
+class ApiKey(TenantMixin, Base):
     __tablename__ = "api_keys"
 
     id: Mapped[int] = mapped_column(primary_key=True)

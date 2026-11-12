@@ -14,6 +14,8 @@ import { api, ApiError } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { ConnectedApp } from "@/lib/types";
 
+const FIRST_PARTY = ["novacorp-assistant-web", "web-assistant"];
+
 export default function AppsPage() {
   const apps = useApi<ConnectedApp[]>("/admin/apps");
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -48,9 +50,9 @@ export default function AppsPage() {
                     </span>
                   </li>
                 ))}
-                {!a.keys.length && <p className="text-[13px] text-ink-500">{a.slug === "novacorp-assistant-web" ? "First-party app — uses employee sign-in, no key required." : "No API keys yet."}</p>}
+                {!a.keys.length && <p className="text-[13px] text-ink-500">{FIRST_PARTY.includes(a.slug) ? "First-party app — uses employee sign-in, no key required." : "No API keys yet."}</p>}
               </ul>
-              {a.slug !== "novacorp-assistant-web" && <Button size="sm" variant="secondary" className="mt-3" onClick={() => void issue(a)}>Issue API key</Button>}
+              {!FIRST_PARTY.includes(a.slug) && <Button size="sm" variant="secondary" className="mt-3" onClick={() => void issue(a)}>Issue API key</Button>}
             </Section>
           ))}
         </div>

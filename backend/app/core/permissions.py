@@ -41,7 +41,7 @@ _ADMIN_EXCLUDED = {"policies:approve", "actions:approve", "actions:finance", "ac
 _ADMIN = [p for p in PERMISSION_CATALOGUE if not p.startswith("data:") and p not in _ADMIN_EXCLUDED]
 
 DEFAULT_ROLES: list[dict] = [
-    {"key": "employee", "name": "Employee", "description": "Standard NovaCorp employee.",
+    {"key": "employee", "name": "Employee", "description": "Standard employee.",
      "permissions": ["assistant:use", "actions:request"]},
     {"key": "hr_manager", "name": "HR Manager", "description": "HR leadership with compensation data scope; approves HR actions.",
      "permissions": ["assistant:use", "actions:request", "actions:approve", "actions:hr", "data:compensation"]},

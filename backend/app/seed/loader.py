@@ -16,7 +16,10 @@ from sqlalchemy.orm import Session
 from app.core.permissions import DEFAULT_ROLES
 from app.core.security import generate_api_key, hash_password
 from app.models import ApiKey, ConnectedApp, EmployeeRecord, Policy, Role, TestCase, TestRun, User
+from app.core.tenancy import use_org
+from app.models import Organization
 from app.models.base import utcnow
+from app.models.organization import DEFAULT_ORG_ID
 from app.seed import data
 from app.seed.documents_data import DOCUMENTS
 from app.services import audit, documents, evaluation, gateway, policies, reviews
@@ -61,6 +64,7 @@ def seed_workspace_history(db: Session) -> int:
 
 def ensure_upgrades(db: Session, password: str) -> dict:
     """Bring an existing installation up to date with new roles, users and reference data (never touches history)."""
+    ensure_default_org(db)
     ensure_roles(db)
     added = ensure_users(db, password)
     ensure_workspace(db)
@@ -184,11 +188,24 @@ def seed_exceptions(db: Session, author: User, approver: User) -> None:
                                       "Use the Finance Operations portal.")
 
 
+def ensure_default_org(db: Session) -> Organization:
+    """The original NovaCorp workspace (id 1). Created by migration 0006 on upgraded databases."""
+    org = db.get(Organization, DEFAULT_ORG_ID)
+    if org is None:
+        org = Organization(id=DEFAULT_ORG_ID, name="NovaCorp", slug="novacorp", industry="Technology", size="1,000–5,000",
+                           is_demo=True)
+        db.add(org)
+        db.flush()
+    use_org(db, DEFAULT_ORG_ID)
+    return org
+
+
 def is_seeded(db: Session) -> bool:
     return (db.scalar(select(func.count(User.id))) or 0) > 0
 
 
 def seed_reference(db: Session, password: str) -> dict:
+    ensure_default_org(db)
     roles = ensure_roles(db)
 
     ensure_users(db, password)

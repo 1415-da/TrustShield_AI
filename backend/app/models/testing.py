@@ -2,19 +2,21 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.organization import TenantMixin
 from app.models.base import JSONType, utcnow
 
 
-class TestCase(Base):
+class TestCase(TenantMixin, Base):
     __tablename__ = "test_cases"
+    __table_args__ = (UniqueConstraint("organization_id", "code", name="uq_test_cases_code_per_org"),)
     __test__ = False  # stop pytest from collecting this class
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    code: Mapped[str] = mapped_column(String(20), unique=True)
+    code: Mapped[str] = mapped_column(String(20))
     name: Mapped[str] = mapped_column(String(200))
     category: Mapped[str] = mapped_column(String(80), index=True)
     role_key: Mapped[str] = mapped_column(String(64))
@@ -26,7 +28,7 @@ class TestCase(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
-class TestRun(Base):
+class TestRun(TenantMixin, Base):
     __tablename__ = "test_runs"
     __test__ = False
 
@@ -47,7 +49,7 @@ class TestRun(Base):
     )
 
 
-class TestResult(Base):
+class TestResult(TenantMixin, Base):
     __tablename__ = "test_results"
     __test__ = False
 

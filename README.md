@@ -38,20 +38,32 @@ docker compose up --build
 |---|---|---|
 | Web app (landing, assistant, console) | http://localhost:3000 | `FRONTEND_PORT` |
 | API + Swagger docs | http://localhost:8000/api/docs | `BACKEND_PORT` |
-| PostgreSQL 15 (localhost only) | `postgresql://trustshield:trustshield@localhost:5433/trustshield` | `DB_PORT` |
+| PostgreSQL 15 (localhost only) | `postgresql://trustshield:trustshield@localhost:55432/trustshield` | `DB_PORT` |
 
 On first start the backend runs Alembic migrations and seeds the demo tenant. Seeding replays about 14 days of traffic through the real gateway and runs the evaluation suite once.
 
-**Port already in use?** If another project or a local Postgres holds 3000, 8000 or 5433, TrustShield's containers start but you reach *the other service* on that port. For example, `localhost:8000` returns `{"detail":"Not Found"}` from someone else's API. Run `scripts/check_ports.sh` to see who owns each port, then set free ports in `.env`:
+**Port already in use?** If another project or a local Postgres holds 3000, 8000 or 55432, TrustShield's containers start but you reach *the other service* on that port. For example, `localhost:8000` returns `{"detail":"Not Found"}` from someone else's API. Run `scripts/check_ports.sh` to see who owns each port, then set free ports in `.env`:
 
 ```env
 FRONTEND_PORT=3200
 BACKEND_PORT=8200
-DB_PORT=5434
+DB_PORT=55433
 PUBLIC_APP_URL=http://localhost:3200
 ```
 
 `docker compose up -d` picks these up every time. The browser only needs the frontend port; it reaches the API through the frontend's `/api` proxy.
+
+### Website, live demo, workspaces and docs
+
+| Page | What it is |
+|---|---|
+| `/` | Product site with live decision counts and a Guard API snippet |
+| `/demo` | Public guardrail playground against the NovaCorp workspace, plus one-click sign-in as any persona |
+| `/signup` | An organization creates its own isolated workspace and becomes its first admin |
+| `/console/setup` | Onboarding checklist, workspace settings and a ready-to-run Guard API call |
+| `/docs` | 14-page documentation: quickstart, decisions, policies, review, agent actions, evidence, Guard API, Assistant API, Slack, self-hosting, roles, security |
+
+Tenant isolation is enforced in the ORM (`app/core/tenancy.py`): every business table has `organization_id`; reads are filtered and inserts stamped automatically from the signed-in user or app key. Existing data becomes workspace 1 (NovaCorp) via migration `0006`.
 
 ### Demo accounts
 

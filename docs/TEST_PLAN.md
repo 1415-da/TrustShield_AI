@@ -21,9 +21,10 @@
 | Feature 2 — compliance evidence | pytest | `test_compliance.py` | 17 | No |
 | Feature 3 — Slack & connected workspace | pytest (+ signed Slack requests through Bolt) | `test_workspace_slack.py` | 19 | No |
 | Feature 4 — agent action controls | pytest | `test_agent_actions.py` | 23 | No |
-| End-to-end — UI flows | Playwright | `frontend/tests/e2e/` | 11 | Yes (running stack) |
+| Release 3 — organizations, isolation, playground, Guard API | pytest | `test_organizations.py` | 20 | No |
+| End-to-end — UI flows | Playwright | `frontend/tests/e2e/` | 15 | Yes (running stack) |
 
-**Total: 197 backend tests + 11 Playwright tests.** Backend tests use SQLite in-memory and the offline model, so they run in ~9 seconds with no network, Slack workspace, or Docker.
+**Total: 217 backend tests + 15 Playwright tests.** Backend tests use SQLite in-memory and the offline model, so they run in ~9 seconds with no network, Slack workspace, or Docker.
 
 ## 3. Evaluation suite (Test Center)
 
@@ -82,6 +83,11 @@ Current result (offline model, seeded data): **49/49 passed, 0 FP of 12 safe, 0 
 | App-key attribution & revocation | `test_api::test_connected_app_keys_attribute_requests` |
 | Provider failure handled cleanly | `test_gateway::test_provider_failure_is_a_clean_error` |
 | Secrets never exposed in settings | `test_api::test_settings_never_expose_secrets` |
+| Organizations cannot see each other's data (lists and by id) | `test_organizations::test_new_workspace_sees_none_of_novacorps_data`, `test_novacorp_cannot_see_the_new_workspace`, e2e "an organization creates its own isolated workspace" |
+| Per-organization audit chain | `test_organizations::test_each_workspace_has_its_own_verifiable_audit_chain` |
+| App keys only work in their own workspace | `test_organizations::test_app_keys_only_work_in_their_own_workspace`, `test_guard_calls_are_audited_in_the_keys_workspace` |
+| Guard API decisions and masking | `test_organizations::test_guard_input_*`, `test_guard_output_*` |
+| Public playground stores nothing, is rate limited | `test_organizations::test_playground_*`, e2e "live demo playground…" |
 
 ## 5. Running the tests
 

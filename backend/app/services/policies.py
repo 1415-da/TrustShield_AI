@@ -311,7 +311,7 @@ def activate(db: Session, policy: Policy, user: User, version_id: int | None = N
             raise Conflict("No approved version is waiting for activation")
     if target.status == "ACTIVE":
         return target
-    if target.status not in ("APPROVED", "INACTIVE") or not target.approved_by:
+    if target.status not in ("APPROVED", "INACTIVE") or not (target.approved_by or target.approved_by_email):
         raise Conflict(f"v{target.version} is {target.status}; only approved versions can be activated")
     current = active_version(policy)
     if current:
@@ -494,3 +494,25 @@ def decide_exception(db: Session, ex: PolicyException, user: User, decision: str
 def list_exceptions(db: Session) -> list[PolicyException]:
     return list(db.scalars(select(PolicyException).order_by(PolicyException.created_at.desc())))
 
+
+
+BASELINE_APPROVER = "TrustShield baseline policy pack"
+
+
+def adopt_baseline(db: Session, data: dict[str, Any], admin: User) -> Policy:
+    """Publish a vetted baseline policy into a newly created workspace.
+
+    The version is recorded as approved by the platform's baseline pack rather than by a person, so the new
+    organization starts protected on day one while every later change still needs a second, human approver.
+    """
+    policy = create_policy(db, data, admin, "Adopted from the TrustShield baseline policy pack")
+    v = policy.versions[-1]
+    v.submitted_by, v.submitted_at = admin.id, utcnow()
+    _transition(db, policy, v, "IN_REVIEW", admin, "submitted", "Baseline policy pack")
+    v.approved_by_email, v.approved_at = BASELINE_APPROVER, utcnow()
+    _transition(db, policy, v, "APPROVED", None, "approved", "Vetted baseline; adopted at workspace creation")
+    v.activated_by, v.activated_by_email, v.activated_at = admin.id, admin.email, utcnow()
+    _transition(db, policy, v, "ACTIVE", admin, "activated", "Workspace created")
+    policy.active_version_id = v.id
+    db.commit()
+    return policy

@@ -33,6 +33,7 @@ from app.guardrails.rules import PolicySnapshot
 from app.guardrails.types import InputAction, OutputAction, RuleMatch, StageResult
 from app.models import ConnectedApp, Conversation, GuardrailDecision, Message, ReviewCase, User
 from app.models.base import utcnow
+from app.core.tenancy import localize
 from app.services import audit, directory, policies, retrieval
 from app.services.llm import LLMError, LLMProvider, get_provider
 
@@ -272,7 +273,10 @@ def process(
         citations=citations if trust_status != "needs_review" else [], grounding=grounding, draft_masked=draft_masked,
         llm_called=llm_called, provider=provider_name, model=model_name,
     )
-    result.explanation = _explain(inp.stage, output_stage, context_stage, trust_status, grounding)
+    result.explanation = localize(db, _explain(inp.stage, output_stage, context_stage, trust_status, grounding))
+    result.final_text = localize(db, result.final_text)
+    if result.draft_masked:
+        result.draft_masked = localize(db, result.draft_masked)
     result.latency_ms = round((time.perf_counter() - t0) * 1000, 1)
     if persist:
         _persist(db, result, actor=actor, prompt=prompt, app=app, conversation_id=conversation_id,

@@ -14,6 +14,7 @@ from app.guardrails.pii import get_pii_detector
 from app.guardrails.types import STORAGE_MASKED_ENTITIES
 from app.models import Message, ReviewAction, ReviewCase, User
 from app.models.base import utcnow
+from app.core.tenancy import localize
 from app.services import audit, gateway
 
 OPEN_STATUSES = ("PENDING", "ESCALATED")
@@ -69,9 +70,9 @@ def _deliver(db: Session, c: ReviewCase, text: str, trust_status: str, decision:
     msg.citations = citations if citations is not None else (c.sources or [])
     explanation = dict(msg.explanation or {})
     explanation.update({
-        "headline": {"approved": "Reviewed and approved by NovaCorp compliance",
-                     "edited": "Reviewed and edited by NovaCorp compliance",
-                     "rejected": "Reviewed by NovaCorp compliance — not approved"}[decision],
+        "headline": localize(db, {"approved": "Reviewed and approved by NovaCorp compliance",
+                                  "edited": "Reviewed and edited by NovaCorp compliance",
+                                  "rejected": "Reviewed by NovaCorp compliance — not approved"}[decision]),
         "reviewed": {"decision": decision, "at": clock().isoformat() + "Z"},
         "warning": None,
     })

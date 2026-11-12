@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.organization import Organization, TenantMixin  # noqa: F401
 from app.models.base import JSONType, utcnow
 
 user_roles = Table(
@@ -28,7 +29,7 @@ class Role(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
-class User(Base):
+class User(TenantMixin, Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -42,6 +43,7 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     roles: Mapped[list[Role]] = relationship(secondary=user_roles, lazy="selectin")
+    organization: Mapped["Organization"] = relationship(lazy="joined")  # noqa: F821
 
     @property
     def role_keys(self) -> list[str]:
@@ -70,13 +72,14 @@ class User(Base):
         return permission in self.permissions
 
 
-class EmployeeRecord(Base):
+class EmployeeRecord(TenantMixin, Base):
     """HR directory used for people lookups. Developer note: every seeded row is synthetic (is_test_data=True)."""
 
     __tablename__ = "employee_records"
+    __table_args__ = (UniqueConstraint("organization_id", "employee_code", name="uq_employee_records_employee_code_per_org"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    employee_code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    employee_code: Mapped[str] = mapped_column(String(20), index=True)
     full_name: Mapped[str] = mapped_column(String(200), index=True)
     department: Mapped[str] = mapped_column(String(120))
     title: Mapped[str] = mapped_column(String(200))

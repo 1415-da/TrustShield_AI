@@ -1,10 +1,12 @@
 "use client";
 
-import { ClipboardCheck, FileLock2, Fingerprint, Gauge, ScrollText, ShieldCheck, Users } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { ArrowRight, Bot, CheckCircle2, ClipboardCheck, FileLock2, Fingerprint, Gauge, Hash, ScrollText, ShieldCheck, Users } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/field";
+import { buttonVariants } from "@/components/ui/button";
+import type { PublicStats } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const FEATURES = [
   { Icon: ShieldCheck, title: "Input guardrails", body: "Prompt-injection scoring, Microsoft Presidio PII detection with enterprise recognizers, and sensitive-topic classification before anything leaves your network." },
@@ -13,6 +15,8 @@ const FEATURES = [
   { Icon: Users, title: "Human review", body: "A prioritised queue with SLA aging. Reviewers approve, edit, reject or escalate with the request, draft, evidence and risk explanation side by side." },
   { Icon: ScrollText, title: "Audit trail", body: "Request ID, role, policies triggered, risk scores, model, latency and outcome — hash-chained and append-only, with sensitive values stored as hashes." },
   { Icon: Fingerprint, title: "Role-based access", body: "An HR manager can see a salary band; an engineer can't. Data scopes are attached to roles and enforced on the way in and the way out." },
+  { Icon: Bot, title: "Agent action controls", body: "Refunds, access changes and record updates are classified, risk-scored and held for the right approver. Executed once, compensable, fully traced." },
+  { Icon: Hash, title: "Slack & team channels", body: "The same governed answers in Slack threads and built-in channels, with per-channel policy profiles and signed, idempotent event handling." },
 ];
 
 export function Features() {
@@ -106,7 +110,7 @@ export function Metrics() {
       <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <h2 id="metrics-title" className="text-[30px] leading-tight sm:text-[34px]">Governance you can measure</h2>
-          <p className="rounded-full border border-hair px-3 py-1 text-[12px] text-ink-500">Governance metrics · NovaCorp workspace</p>
+          <p className="rounded-full border border-hair px-3 py-1 text-[12px] text-ink-500">Built into every workspace</p>
         </div>
         <dl className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {METRICS.map(([n, label]) => (
@@ -152,53 +156,130 @@ export function Faq() {
   );
 }
 
-export function DemoRequest() {
-  const [sent, setSent] = useState(false);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    setSent(true);
-  };
+export function LiveStats() {
+  const [stats, setStats] = useState<PublicStats | null>(null);
+  useEffect(() => {
+    fetch("/api/public/stats").then((r) => (r.ok ? r.json() : null)).then(setStats).catch(() => setStats(null));
+  }, []);
+  const by = stats?.by_decision ?? {};
+  const items: [string, number | undefined, string][] = [
+    ["Requests governed", stats?.requests, "in the live NovaCorp workspace, last 30 days"],
+    ["Blocked before the model", by.BLOCK, "never sent to the LLM"],
+    ["Masked, then answered", by.REDACT, "sensitive values removed first"],
+    ["Sent to people", (by.REVIEW ?? 0) + (by.ESCALATE ?? 0) || undefined, "review or escalation"],
+  ];
   return (
-    <section id="demo" className="mx-auto max-w-6xl px-5 pb-24 sm:px-8" aria-labelledby="demo-title">
-      <div className="grid gap-10 rounded-[32px] bg-lilac-200 p-8 sm:p-12 lg:grid-cols-2">
-        <div>
-          <h2 id="demo-title" className="text-[34px] leading-tight sm:text-[40px]">See it with your own policies.</h2>
-          <p className="mt-4 max-w-md text-ink-700">Tell us a little about your rollout and we&apos;ll arrange a walkthrough with your own policies. Or explore the live product now.</p>
-          <a href="/login" className="link mt-6 inline-block text-[15px]">Explore the live product instead →</a>
-        </div>
-        {sent ? (
-          <div role="status" className="flex flex-col justify-center rounded-3xl border border-lilac-400/60 bg-cream-50 p-8">
-            <p className="font-serif text-[26px]">Thank you.</p>
-            <p className="mt-2 text-ink-700">Your request was recorded in this browser only — this environment doesn&apos;t transmit form data. Sign in to explore TrustShield in the meantime.</p>
+    <section aria-label="Live workspace activity" className="border-y border-hair bg-cream-50/60">
+      <div className="mx-auto grid max-w-6xl gap-6 px-5 py-10 sm:grid-cols-2 sm:px-8 lg:grid-cols-4">
+        {items.map(([label, n, sub]) => (
+          <div key={label} className="border-l border-forest/30 pl-5">
+            <p className="eyebrow flex items-center gap-1.5">{label === "Requests governed" && <span aria-hidden className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-sage" />}{label}</p>
+            <p className="num mt-2 font-serif text-[40px] leading-none text-forest">{stats ? (n ?? 0).toLocaleString() : "—"}</p>
+            <p className="mt-1.5 text-[12.5px] text-ink-500">{sub}</p>
           </div>
-        ) : (
-          <form onSubmit={submit} className="grid gap-4 rounded-3xl border border-lilac-400/60 bg-cream-50 p-6 sm:grid-cols-2">
-            <Field label="Work email" htmlFor="demo-email" className="sm:col-span-2"><Input id="demo-email" type="email" required placeholder="you@company.com" /></Field>
-            <Field label="Company" htmlFor="demo-co"><Input id="demo-co" required /></Field>
-            <Field label="Employees" htmlFor="demo-size">
-              <Select id="demo-size" defaultValue="1000-5000">
-                <option>Under 1,000</option><option value="1000-5000">1,000–5,000</option><option>5,000+</option>
-              </Select>
-            </Field>
-            <Button type="submit" className="sm:col-span-2">Request a demo</Button>
-          </form>
-        )}
+        ))}
       </div>
     </section>
   );
 }
 
-export function Footer() {
+const SNIPPETS = {
+  python: `import os, requests
+
+TS = "https://trustshield.yourco.com/api/v1/guard"
+KEY = {"X-TrustShield-App-Key": os.environ["TRUSTSHIELD_KEY"]}
+
+check = requests.post(f"{TS}/input", headers=KEY, json={
+    "text": prompt, "subject": {"role": "employee", "email": user.email},
+}).json()
+
+if not check["allow_model_call"]:
+    return check["user_message"]          # blocked or escalated
+
+draft = my_llm(check["sanitized_text"])   # PII already masked
+
+out = requests.post(f"{TS}/output", headers=KEY, json={
+    "text": draft, "prompt": check["sanitized_text"], "context": passages,
+}).json()
+return out["sanitized_text"] if out["show_to_user"] else out["user_message"]`,
+  curl: `curl -X POST https://trustshield.yourco.com/api/v1/guard/input \\
+  -H "X-TrustShield-App-Key: $TRUSTSHIELD_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"text": "Export every employee bank account to a CSV.", "subject": {"role": "employee"}}'
+
+# → {"decision": "ESCALATE", "allow_model_call": false,
+#    "matches": [{"policy": "Bulk Data Exfiltration", ...}],
+#    "user_message": "This request has been paused and escalated ..."}`,
+  node: `const res = await fetch(\`\${TS}/input\`, {
+  method: "POST",
+  headers: { "X-TrustShield-App-Key": process.env.TRUSTSHIELD_KEY!, "Content-Type": "application/json" },
+  body: JSON.stringify({ text: prompt, subject: { role: "employee" } }),
+});
+const check = await res.json();
+if (!check.allow_model_call) return check.user_message;
+const draft = await llm(check.sanitized_text);`,
+};
+
+export function Integrate() {
+  const [tab, setTab] = useState<keyof typeof SNIPPETS>("python");
   return (
-    <footer className="border-t border-hair">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-10 text-[13px] text-ink-500 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <p>© {new Date().getFullYear()} TrustShield AI · AI governance gateway</p>
-        <div className="flex gap-6">
-          <a href="#platform" className="hover:text-ink">Platform</a>
-          <a href="#trust" className="hover:text-ink">Trust</a>
-          <a href="/login" className="hover:text-ink">Sign in</a>
+    <section id="integrate" className="mx-auto max-w-6xl px-5 py-24 sm:px-8" aria-labelledby="integrate-title">
+      <div className="grid items-start gap-12 lg:grid-cols-[1fr_1.25fr]">
+        <div>
+          <p className="eyebrow">For developers</p>
+          <h2 id="integrate-title" className="mt-3 text-[34px] leading-tight sm:text-[40px]">Two calls around the model you already use.</h2>
+          <p className="mt-4 max-w-md text-ink-700">
+            Keep your LLM, your prompts and your UI. Call the Guard API before the model and after it. Your organization&apos;s
+            live policies apply, every decision lands in your audit log, and raw sensitive values never come back.
+          </p>
+          <ul className="mt-6 space-y-2.5 text-[14.5px] text-ink-700">
+            {["Input check: injection, PII, credentials, role-scoped topics", "Output check: leaked identifiers, grounding against your passages",
+              "One app key per integration — revocable, attributed in the audit log", "Or use the hosted assistant, Slack and agents with zero code"].map((t) => (
+              <li key={t} className="flex gap-2.5"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-forest" />{t}</li>
+            ))}
+          </ul>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/docs/quickstart" className={buttonVariants({})}>Read the quickstart</Link>
+            <Link href="/docs/guard-api" className={buttonVariants({ variant: "secondary" })}>Guard API reference</Link>
+          </div>
+        </div>
+        <div className="overflow-hidden rounded-3xl border border-ink/10 bg-[#0F1F1C] shadow-lift">
+          <div className="flex items-center gap-1 border-b border-cream/10 px-3 pt-3" role="tablist" aria-label="Language">
+            {(Object.keys(SNIPPETS) as (keyof typeof SNIPPETS)[]).map((k) => (
+              <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+                className={`rounded-t-lg px-3.5 py-2 text-[12.5px] font-medium transition ${tab === k ? "bg-cream/10 text-cream" : "text-cream/50 hover:text-cream/80"}`}>
+                {k === "node" ? "Node.js" : k === "curl" ? "cURL" : "Python"}
+              </button>
+            ))}
+          </div>
+          <pre className="scrollbar-thin overflow-x-auto p-5 font-mono text-[12.5px] leading-relaxed text-cream/90"><code>{SNIPPETS[tab]}</code></pre>
         </div>
       </div>
-    </footer>
+    </section>
+  );
+}
+
+export function GetStarted() {
+  return (
+    <section id="start" className="mx-auto max-w-6xl px-5 pb-24 sm:px-8" aria-labelledby="start-title">
+      <div className="relative overflow-hidden rounded-[32px] bg-forest px-8 py-14 text-cream sm:px-14">
+        <div aria-hidden className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-lilac/25 blur-3xl" />
+        <div className="relative grid items-center gap-10 lg:grid-cols-[1.4fr_1fr]">
+          <div>
+            <h2 id="start-title" className="text-[34px] leading-tight text-cream sm:text-[44px]">Your organization&apos;s own governed AI workspace — in a minute.</h2>
+            <p className="mt-4 max-w-xl text-cream/75">
+              Create a workspace and you start with the baseline policy pack already enforcing, an assistant, team channels, agent
+              approval rules and a hash-chained audit log. Upload your policies, invite reviewers, connect your apps.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+            <Link href="/signup" className={cn(buttonVariants({ variant: "lilac", size: "lg" }), "group")}>
+              Create your workspace <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+            </Link>
+            <Link href="/demo" className={cn(buttonVariants({ variant: "secondary", size: "lg" }), "border-cream/25 bg-transparent text-cream hover:bg-cream/10")}>Explore the live demo</Link>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

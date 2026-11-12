@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import require_permission
-from app.core.errors import BadRequest, Conflict, NotFound
+from app.core.errors import BadRequest, Conflict, Forbidden, NotFound
+from app.core.tenancy import org_id
+from app.models.organization import DEFAULT_ORG_ID
 from app.core.permissions import PERMISSION_CATALOGUE
 from app.core.security import generate_api_key
 from app.guardrails.pii import get_pii_detector
@@ -72,6 +74,9 @@ def update_role(role_id: int, body: RoleUpdate, admin: User = Depends(can_users)
     role = db.get(Role, role_id)
     if role is None:
         raise NotFound("Role")
+    if org_id(db) != DEFAULT_ORG_ID:
+        # Roles are shared by every workspace on this deployment, so only the platform workspace may redefine them.
+        raise Forbidden("Role permissions are managed by the platform administrator. Assign roles to users instead.")
     unknown = [p for p in body.permissions if p not in PERMISSION_CATALOGUE]
     if unknown:
         raise BadRequest(f"Unknown permissions: {', '.join(unknown)}")

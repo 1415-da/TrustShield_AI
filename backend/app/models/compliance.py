@@ -13,13 +13,14 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, eve
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+from app.models.organization import TenantMixin
 from app.models.base import JSONType, utcnow
 
 IMMUTABLE_FIELDS = ("content", "content_hash", "source_event_ids", "source_record_count", "filters", "period_start",
                     "period_end", "report_type", "title", "generated_by", "completed_at")
 
 
-class ComplianceReport(Base):
+class ComplianceReport(TenantMixin, Base):
     __tablename__ = "compliance_reports"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -64,7 +65,7 @@ def _guard_report(_mapper, _conn, target: ComplianceReport) -> None:
         raise ImmutableReportError(f"report {target.id} cannot move from {previous} to {target.status}")
 
 
-class ReportSchedule(Base):
+class ReportSchedule(TenantMixin, Base):
     __tablename__ = "report_schedules"
 
     id: Mapped[int] = mapped_column(primary_key=True)

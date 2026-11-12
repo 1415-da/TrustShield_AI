@@ -10,7 +10,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:${DB_PORT:-5433}:5432"   # localhost only; 5433 avoids clashing with a local Postgres on 5432
+      - "127.0.0.1:${DB_PORT:-55432}:5432"  # localhost only; 55432 avoids clashing with local Postgres installs
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trustshield} -d ${POSTGRES_DB:-trustshield}"]
       interval: 3s

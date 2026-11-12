@@ -277,6 +277,24 @@ curl -s localhost:8000/api/agent/actions -H "authorization: Bearer $FINANCE" -H 
 
 Error codes added in Release 2: `403 forbidden` for separation-of-duties and wrong-approver-role, `409 conflict` for invalid lifecycle transitions (activating an unapproved version, executing an unapproved or already-executed action, acting on a resolved item).
 
+## Organization workspaces, live demo, Guard API (Release 3)
+
+Every business record belongs to one organization. Requests are scoped to the signed-in user's organization (or, for the Guard API, the app key's). Cross-organization ids return 404.
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/orgs/signup` | none (20/hour per client) | `{organization_name, full_name, email, password (≥10), industry?, size?}` → 201, same shape as login. Creates the workspace, its first TrustShield Admin, baseline policies (active), profiles, channels, web app, agent rules and restrictive test scenarios |
+| GET | `/orgs/current` | any user | Organization profile, stats and onboarding checklist |
+| PATCH | `/orgs/current` | users:manage | `{name?, industry?, size?}` |
+| POST | `/admin/users` | users:manage | `{email, full_name, role_keys[], department?, temporary_password}` → 201. Audited as `user.invited` |
+| PATCH | `/admin/roles/{id}` | users:manage | Now 403 outside the platform workspace: roles are shared by all workspaces |
+| POST | `/public/playground` | none (30/min per client) | `{prompt, role: employee\|hr_manager\|finance_analyst}` → decision, stages (policy names only), sanitized prompt, answer. Runs against the NovaCorp workspace, nothing stored except a `playground.scan` audit event with a hash |
+| GET | `/public/stats` | none | 30-day decision counts for the NovaCorp workspace and the number of workspaces |
+| POST | `/v1/guard/input` | `X-TrustShield-App-Key` | `{text, subject{role, email?, department?, profile?}}` → `{request_id, decision, allow_model_call, hold_answer_for_review, sanitized_text, risk_score, redacted_entity_types, matches[], user_message}` |
+| POST | `/v1/guard/output` | `X-TrustShield-App-Key` | `{text, prompt?, context[]?, subject}` → `{decision, show_to_user, sanitized_text, confidence, matches[], user_message}`. Grounding rules run only when `context` is supplied |
+
+Guard API calls are audited as `api.guard_input` / `api.guard_output` with a hash of the text, never the text.
+
 ## Example: curl session
 
 ```bash

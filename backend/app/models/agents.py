@@ -12,6 +12,7 @@ from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, Str
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+from app.models.organization import TenantMixin
 from app.models.base import JSONType, utcnow
 
 ACTION_CATEGORIES = ("READ", "SENSITIVE_READ", "CREATE", "UPDATE", "FINANCIAL_ACTION", "COMMUNICATION", "DESTRUCTIVE_ACTION", "ADMIN_ACTION")
@@ -20,11 +21,12 @@ ACTION_STATUSES = ("PENDING_APPROVAL", "IN_REVIEW", "ESCALATED", "NEEDS_INFO", "
                    "BLOCKED", "FAILED", "COMPENSATED")
 
 
-class Agent(Base):
+class Agent(TenantMixin, Base):
     __tablename__ = "agents"
+    __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_agents_key_per_org"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    key: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    key: Mapped[str] = mapped_column(String(60), index=True)
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     owner_team: Mapped[str] = mapped_column(String(120), default="")
@@ -33,11 +35,12 @@ class Agent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
-class ActionType(Base):
+class ActionType(TenantMixin, Base):
     __tablename__ = "action_types"
+    __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_action_types_key_per_org"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    key: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    key: Mapped[str] = mapped_column(String(60), index=True)
     name: Mapped[str] = mapped_column(String(200))
     category: Mapped[str] = mapped_column(String(30), index=True)
     description: Mapped[str] = mapped_column(Text, default="")
@@ -49,13 +52,14 @@ class ActionType(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
-class ActionPolicy(Base):
+class ActionPolicy(TenantMixin, Base):
     """Configurable approval rule. Conditions: amount_gt/gte/lt/lte, requester_roles, external (bool)."""
 
     __tablename__ = "action_policies"
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_action_policies_name_per_org"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(200), unique=True)
+    name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     action_type: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
     category: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
@@ -69,7 +73,7 @@ class ActionPolicy(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-class AgentAction(Base):
+class AgentAction(TenantMixin, Base):
     __tablename__ = "agent_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -104,7 +108,7 @@ class AgentAction(Base):
     executed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class ActionApproval(Base):
+class ActionApproval(TenantMixin, Base):
     __tablename__ = "action_approvals"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -118,7 +122,7 @@ class ActionApproval(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class ActionExecution(Base):
+class ActionExecution(TenantMixin, Base):
     __tablename__ = "action_executions"
     __table_args__ = (
         Index("uq_one_successful_execution", "action_id", unique=True,
@@ -137,7 +141,7 @@ class ActionExecution(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class ActionAuditEvent(Base):
+class ActionAuditEvent(TenantMixin, Base):
     """Per-action trail; every row is mirrored into the hash-chained global audit log."""
 
     __tablename__ = "action_audit_events"
@@ -156,7 +160,7 @@ class ActionAuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 
-class ActionIdempotencyKey(Base):
+class ActionIdempotencyKey(TenantMixin, Base):
     __tablename__ = "action_idempotency_keys"
     __table_args__ = (UniqueConstraint("user_id", "key", name="uq_action_idempotency_per_user"),)
 

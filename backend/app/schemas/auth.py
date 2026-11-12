@@ -29,6 +29,13 @@ class TokenPair(BaseModel):
     expires_in: int
 
 
+class OrganizationRef(BaseModel):
+    id: int
+    name: str
+    slug: str
+    is_demo: bool = False
+
+
 class UserOut(ORMModel):
     id: int
     email: str
@@ -41,12 +48,14 @@ class UserOut(ORMModel):
     permissions: list[str]
     created_at: UTCDatetime
     last_login_at: UTCDatetime | None = None
+    organization: OrganizationRef | None = None
 
     @classmethod
     def of(cls, user) -> "UserOut":  # type: ignore[no-untyped-def]
         return cls.model_validate({**{c: getattr(user, c) for c in (
             "id", "email", "full_name", "department", "title", "is_active", "role_keys", "primary_role", "created_at",
-            "last_login_at")}, "permissions": sorted(user.permissions)})
+            "last_login_at")}, "permissions": sorted(user.permissions),
+            "organization": {"id": o.id, "name": o.name, "slug": o.slug, "is_demo": bool(o.is_demo)} if (o := user.organization) else None})
 
 
 class LoginResponse(TokenPair):

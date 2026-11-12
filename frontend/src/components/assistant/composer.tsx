@@ -37,7 +37,7 @@ export function Composer({ value, onChange, onSend, busy, mode = "ask", onModeCh
       onSubmit={(e) => { e.preventDefault(); if (value.trim() && !busy) onSend(); }}
       className="flex items-end gap-2 rounded-[26px] border border-ink/15 bg-white/80 p-2 pl-4 shadow-soft transition focus-within:border-forest focus-within:ring-2 focus-within:ring-forest/10"
     >
-      <label htmlFor="composer" className="sr-only">Ask the NovaCorp assistant</label>
+      <label htmlFor="composer" className="sr-only">Ask the assistant</label>
       <textarea
         id="composer"
         ref={ref}
@@ -46,7 +46,7 @@ export function Composer({ value, onChange, onSend, busy, mode = "ask", onModeCh
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKey}
         maxLength={4000}
-        placeholder={mode === "action" ? "e.g. Issue a refund for vendor invoice INV-2291" : "Ask about a NovaCorp policy…"}
+        placeholder={mode === "action" ? "e.g. Issue a refund for vendor invoice INV-2291" : "Ask about a company policy…"}
         className="max-h-[180px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-relaxed placeholder:text-ink-400 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
         data-testid="composer"
       />

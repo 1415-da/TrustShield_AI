@@ -139,7 +139,7 @@ export default function WorkspacePage() {
   const sidebar = (
     <div className="flex h-full flex-col bg-forest text-cream">
       <div className="flex items-center justify-between px-5 pb-5 pt-5">
-        <div className="flex items-center gap-2.5"><ShieldMark /><div><p className="font-serif text-[19px] leading-none">NovaCorp</p><p className="mt-1 text-[11px] text-cream/60">Connected workspace</p></div></div>
+        <div className="flex items-center gap-2.5"><ShieldMark /><div><p className="font-serif text-[19px] leading-none">{user?.organization?.name ?? "Workspace"}</p><p className="mt-1 text-[11px] text-cream/60">Connected workspace</p></div></div>
         <button className="rounded-full p-1.5 hover:bg-cream/10 lg:hidden" onClick={() => setDrawer(false)} aria-label="Close channels"><X className="h-4 w-4" /></button>
       </div>
       <p className="px-5 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/50">Channels</p>

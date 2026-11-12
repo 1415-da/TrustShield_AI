@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BookOpenText, Bot, CircleSlash2, Hash, FileCheck2, FlaskConical, Gauge, Inbox, KeyRound, LogOut, Menu, MessagesSquare, PlugZap, ScrollText, Settings2, ShieldCheck,
+  BookOpenText, Bot, Rocket, CircleSlash2, Hash, FileCheck2, FlaskConical, Gauge, Inbox, KeyRound, LogOut, Menu, MessagesSquare, PlugZap, ScrollText, Settings2, ShieldCheck,
   SlidersHorizontal, Users, X, type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -23,6 +23,7 @@ const allowed = (can: (p: string) => boolean, perm: string | string[]) => (Array
 export const NAV: { group: string; items: NavItem[] }[] = [
   { group: "Govern", items: [
     { href: "/console", label: "Overview", Icon: Gauge, perm: "analytics:read" },
+    { href: "/console/setup", label: "Get started", Icon: Rocket, perm: "users:manage" },
     { href: "/console/policies", label: "Policy Studio", Icon: ShieldCheck, perm: "policies:read" },
     { href: "/console/approvals", label: "Policy approvals", Icon: Inbox, perm: "policies:read" },
     { href: "/console/exceptions", label: "Exceptions", Icon: CircleSlash2, perm: "policies:read" },
@@ -69,10 +70,16 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
   const isActive = (href: string) => (href === "/console" ? path === "/console" : path.startsWith(href));
   const nav = (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-5 pb-6 pt-5">
+      <div className="flex items-center justify-between px-5 pb-4 pt-5">
         <Logo href="/console" />
         <button onClick={() => setOpen(false)} className="rounded-full p-1.5 hover:bg-ink/5 lg:hidden" aria-label="Close navigation"><X className="h-4 w-4" /></button>
       </div>
+      {user.organization && (
+        <div className="mx-3 mb-5 rounded-xl border border-hair bg-white/60 px-3 py-2" data-testid="org-switcher">
+          <p className="eyebrow text-[10px]">{user.organization.is_demo ? "Live demo workspace" : "Workspace"}</p>
+          <p className="truncate text-[13.5px] font-medium" title={user.organization.name}>{user.organization.name}</p>
+        </div>
+      )}
       <nav className="scrollbar-thin flex-1 space-y-6 overflow-y-auto px-3" aria-label="Console">
         {NAV.map((g) => {
           const items = g.items.filter((i) => allowed(can, i.perm));
@@ -106,6 +113,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
         })}
       </nav>
       <div className="border-t border-hair p-3">
+        <Link href="/docs" className="mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]"><BookOpenText className="h-4 w-4 text-ink-400" />Documentation</Link>
         {can("assistant:use") && (
           <Link href="/assistant" className="mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]"><KeyRound className="h-4 w-4 text-ink-400" />Open assistant</Link>
         )}

@@ -33,6 +33,7 @@ function greeting(): string {
 
 export default function AssistantPage() {
   const { user, loading, logout, can } = useAuth();
+  const orgName = user?.organization?.name ?? "Your organization";
   const router = useRouter();
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -171,7 +172,7 @@ export default function AssistantPage() {
         <header className="flex h-14 items-center justify-between border-b border-hair px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <button className="rounded-full p-2 hover:bg-ink/5 lg:hidden" onClick={() => setDrawer(true)} aria-label="Open menu"><Menu className="h-4 w-4" /></button>
-            <h1 className="font-sans text-[14px] font-medium text-ink-700">NovaCorp Assistant</h1>
+            <h1 className="font-sans text-[14px] font-medium text-ink-700">{orgName} Assistant</h1>
           </div>
           <p className="flex items-center gap-1.5 text-[12px] text-ink-500"><ShieldCheck className="h-3.5 w-3.5 text-forest" />Protected by TrustShield</p>
         </header>
@@ -180,9 +181,9 @@ export default function AssistantPage() {
           <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
             {!activeId && messages.length === 0 ? (
               <div className="pt-[8vh] animate-rise">
-                <p className="eyebrow">NovaCorp internal assistant</p>
+                <p className="eyebrow">{orgName} internal assistant</p>
                 <h2 className="mt-3 text-[40px] leading-tight sm:text-[48px]">{greeting()}, {user.full_name.split(" ")[0]}.</h2>
-                <p className="mt-3 max-w-lg text-ink-700">Ask about expenses, leave, procurement, IT access or security. Answers cite NovaCorp policy, and requests are checked before they reach the AI model.</p>
+                <p className="mt-3 max-w-lg text-ink-700">Ask about expenses, leave, procurement, IT access or security. Answers cite {orgName} policy, and requests are checked before they reach the AI model.</p>
                 <div className="mt-10 grid gap-2.5 sm:grid-cols-2">
                   {SUGGESTIONS.map((s) => (
                     <button key={s} onClick={() => void send(s)} disabled={sending} className="rounded-2xl border border-hair bg-cream-50 px-4 py-3.5 text-left text-[14px] leading-snug transition hover:border-forest/40 hover:bg-white" data-testid="suggestion">
@@ -218,7 +219,7 @@ export default function AssistantPage() {
         <div className="border-t border-hair bg-cream/90 px-4 pb-5 pt-3 backdrop-blur sm:px-6">
           <div className="mx-auto max-w-3xl">
             <Composer value={draft} onChange={setDraft} onSend={() => void send()} busy={sending} mode={mode} onModeChange={can("actions:request") ? setMode : undefined} />
-            <p className="mt-2 text-center text-[11.5px] text-ink-400">Answers are checked against NovaCorp policy. Confidence scores are risk signals, not guarantees.</p>
+            <p className="mt-2 text-center text-[11.5px] text-ink-400">Answers are checked against {orgName} policy. Confidence scores are risk signals, not guarantees.</p>
           </div>
         </div>
       </main>

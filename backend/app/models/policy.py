@@ -14,17 +14,19 @@ from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, Uniqu
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.organization import TenantMixin
 from app.models.base import JSONType, utcnow
 
 VERSION_STATUSES = ("DRAFT", "IN_REVIEW", "CHANGES_REQUESTED", "REJECTED", "APPROVED", "ACTIVE", "INACTIVE", "ARCHIVED")
 EDITABLE_STATUSES = ("DRAFT", "CHANGES_REQUESTED", "REJECTED")
 
 
-class Policy(Base):
+class Policy(TenantMixin, Base):
     __tablename__ = "policies"
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_policies_name_per_org"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(200), unique=True)
+    name: Mapped[str] = mapped_column(String(200))
     risk_category: Mapped[str] = mapped_column(String(80), index=True)
     owner: Mapped[str] = mapped_column(String(200), default="")
     review_cadence_days: Mapped[int] = mapped_column(Integer, default=180)
@@ -43,7 +45,7 @@ class Policy(Base):
     )
 
 
-class PolicyVersion(Base):
+class PolicyVersion(TenantMixin, Base):
     __tablename__ = "policy_versions"
     __table_args__ = (
         UniqueConstraint("policy_id", "version", name="uq_policy_version_number"),
@@ -93,7 +95,7 @@ def _guard_snapshot(_mapper, _conn, target: PolicyVersion) -> None:
         raise ImmutableVersionError(f"policy version v{target.version} is {previous} and cannot be modified")
 
 
-class PolicyApproval(Base):
+class PolicyApproval(TenantMixin, Base):
     """One review request per submission. Decisions: APPROVED, CHANGES_REQUESTED, REJECTED (or WITHDRAWN)."""
 
     __tablename__ = "policy_approvals"
@@ -113,7 +115,7 @@ class PolicyApproval(Base):
     impact: Mapped[dict | None] = mapped_column(JSONType, nullable=True)  # cached evaluation-suite impact analysis
 
 
-class PolicyComment(Base):
+class PolicyComment(TenantMixin, Base):
     __tablename__ = "policy_comments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -125,7 +127,7 @@ class PolicyComment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
-class PolicyAuditEvent(Base):
+class PolicyAuditEvent(TenantMixin, Base):
     """Per-policy lifecycle trail. Each row is mirrored into the global hash-chained audit_events table."""
 
     __tablename__ = "policy_audit_events"
@@ -146,7 +148,7 @@ class PolicyAuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 
-class PolicyException(Base):
+class PolicyException(TenantMixin, Base):
     """A time-boxed, approved exemption from one policy for a user, role, or department."""
 
     __tablename__ = "policy_exceptions"

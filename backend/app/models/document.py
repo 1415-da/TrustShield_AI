@@ -6,10 +6,11 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.organization import TenantMixin
 from app.models.base import JSONType, utcnow
 
 
-class Document(Base):
+class Document(TenantMixin, Base):
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -31,7 +32,7 @@ class Document(Base):
     )
 
 
-class DocumentChunk(Base):
+class DocumentChunk(TenantMixin, Base):
     __tablename__ = "document_chunks"
 
     id: Mapped[int] = mapped_column(primary_key=True)

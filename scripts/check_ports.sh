@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -f .env ] && set -a && . ./.env && set +a
-FRONTEND_PORT=${FRONTEND_PORT:-3000}; BACKEND_PORT=${BACKEND_PORT:-8000}; DB_PORT=${DB_PORT:-5433}
+FRONTEND_PORT=${FRONTEND_PORT:-3000}; BACKEND_PORT=${BACKEND_PORT:-8000}; DB_PORT=${DB_PORT:-55432}
 status=0
 for pair in "frontend:$FRONTEND_PORT" "backend:$BACKEND_PORT" "database:$DB_PORT"; do
   name=${pair%%:*}; port=${pair##*:}

@@ -15,6 +15,69 @@ export interface User {
   permissions: string[];
   created_at: string;
   last_login_at: string | null;
+  organization: OrganizationRef | null;
+}
+
+export interface OrganizationRef {
+  id: number;
+  name: string;
+  slug: string;
+  is_demo: boolean;
+}
+
+export interface OnboardingStep {
+  key: string;
+  title: string;
+  detail: string;
+  done: boolean;
+  href: string;
+}
+
+export interface OrganizationSummary extends OrganizationRef {
+  industry: string;
+  size: string;
+  created_at: string;
+  stats: { users: number; documents: number; active_policies: number; api_keys: number; requests: number; reviewers: number };
+  onboarding: OnboardingStep[];
+  onboarding_complete: boolean;
+}
+
+export interface PlaygroundMatch {
+  policy_name: string;
+  rule_name: string;
+  action: string;
+  severity: Severity;
+  risk_category: string;
+}
+
+export interface PlaygroundStage {
+  stage: "input" | "context" | "output";
+  action: string;
+  risk_score: number;
+  latency_ms: number;
+  redacted_entity_types: string[];
+  matches: PlaygroundMatch[];
+}
+
+export interface PlaygroundResult {
+  role: string;
+  decision: InputAction;
+  output_decision: OutputAction | null;
+  trust_status: TrustStatus;
+  llm_called: boolean;
+  sanitized_prompt: string;
+  response: string | null;
+  explanation: Explanation | null;
+  citations: { title: string; heading: string; snippet: string }[];
+  stages: PlaygroundStage[];
+  latency_ms: number;
+}
+
+export interface PublicStats {
+  window_days: number;
+  requests: number;
+  by_decision: Record<string, number>;
+  workspaces: number;
 }
 
 export interface Citation {

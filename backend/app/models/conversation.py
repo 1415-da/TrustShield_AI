@@ -6,10 +6,11 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.organization import TenantMixin
 from app.models.base import JSONType, utcnow
 
 
-class Conversation(Base):
+class Conversation(TenantMixin, Base):
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -24,7 +25,7 @@ class Conversation(Base):
     )
 
 
-class Message(Base):
+class Message(TenantMixin, Base):
     """A chat message. `content` is always the *masked* text; raw content is kept only as a hash."""
 
     __tablename__ = "messages"

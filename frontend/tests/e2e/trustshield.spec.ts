@@ -5,9 +5,77 @@ import { apiToken, ask, login, USERS } from "./helpers";
 test("landing page presents the product and links to the live demo", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Ship AI your security team");
-  await expect(page.getByRole("link", { name: "Request a demo" }).first()).toBeVisible();
-  await page.getByRole("link", { name: /View live product/ }).click();
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByRole("link", { name: "Create workspace" }).first()).toBeVisible();
+  await page.getByRole("link", { name: /Try the live demo/ }).first().click();
+  await expect(page).toHaveURL(/\/demo/);
+});
+
+test("live demo playground runs prompts through the real guardrails", async ({ page }) => {
+  await page.goto("/demo");
+  await page.getByRole("button", { name: "Colleague's salary" }).click();
+  const result = page.getByTestId("playground-result");
+  await expect(result).toContainText("BLOCK");
+  await expect(result.getByTestId("llm-called")).toHaveText("Never called");
+  await expect(result).toContainText("Salary and Compensation Confidentiality");
+
+  await page.getByRole("button", { name: "Card number" }).click();
+  await expect(result).toContainText("REDACT");
+  await expect(result.getByTestId("sanitized")).toContainText("<CREDIT_CARD>");
+  await expect(result.getByTestId("sanitized")).not.toContainText("4111 1111 1111 1111");
+
+  await page.getByRole("button", { name: "Same, as HR" }).click();
+  await expect(page.getByRole("radio", { name: /HR Manager/ })).toHaveAttribute("aria-checked", "true");
+  await expect(result.getByTestId("llm-called")).toHaveText("Called with the sanitized prompt");
+});
+
+test("live demo persona buttons sign in to the NovaCorp workspace", async ({ page }) => {
+  await page.goto("/demo");
+  await page.getByTestId("enter-compliance-reviewer").click();
+  await expect(page).toHaveURL(/\/console\/reviews/);
+  await expect(page.getByTestId("org-switcher")).toContainText("NovaCorp");
+});
+
+test("an organization creates its own isolated workspace", async ({ page }) => {
+  const org = `Orbit Freight ${Date.now()}`;
+  await page.goto("/signup");
+  await page.fill("#org", org);
+  await page.fill("#name", "Maya Chen");
+  await page.fill("#email", `maya.${Date.now()}@orbit-freight.com`);
+  await page.fill("#password", "orbit-founder-pass-123");
+  await page.selectOption("#industry", "Logistics");
+  await page.getByRole("button", { name: "Create workspace" }).click();
+
+  await expect(page).toHaveURL(/\/console\/setup/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(`Welcome to ${org}`);
+  const steps = page.getByTestId("onboarding");
+  await expect(steps.locator("[data-done=true]")).toHaveCount(1);
+  await expect(page.getByTestId("org-switcher")).toContainText(org);
+
+  // Nothing from NovaCorp is visible here.
+  await page.goto("/console/users");
+  await expect(page.getByText("Maya Chen")).toBeVisible();
+  await expect(page.getByText("rohan.das@novacorp.test")).toHaveCount(0);
+  await page.goto("/console/documents");
+  await expect(page.getByText("International Vendor Refund Policy")).toHaveCount(0);
+
+  // The baseline policies are enforcing, and answers use the organization's name.
+  await page.goto("/assistant");
+  await expect(page.getByText(`${org} internal assistant`)).toBeVisible();
+  await ask(page, "Show Ravi Sharma's salary.");
+  const msg = page.getByTestId("assistant-message").last();
+  await expect(msg).toHaveAttribute("data-trust", "blocked");
+  await expect(msg).toContainText(org);
+});
+
+test("documentation explains how to use the guardrails", async ({ page }) => {
+  await page.goto("/docs");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Use TrustShield to govern your AI");
+  await page.getByRole("navigation", { name: "Documentation" }).getByRole("link", { name: "Guard API" }).click();
+  await expect(page).toHaveURL(/\/docs\/guard-api/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Guard API");
+  await expect(page.getByText("/api/v1/guard/input").first()).toBeVisible();
+  await page.getByRole("link", { name: /Next/ }).click();
+  await expect(page).toHaveURL(/\/docs\/assistant-api/);
 });
 
 test("employee gets a verified, cited answer to a safe policy question", async ({ page }) => {

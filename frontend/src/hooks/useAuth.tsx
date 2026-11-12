@@ -2,15 +2,26 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { api, getSession, setSession } from "@/lib/api";
+import { api, ApiError, getSession, setSession } from "@/lib/api";
 import type { User } from "@/lib/types";
 
 interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
+  signup: (body: SignupBody) => Promise<User>;
+  refresh: () => Promise<void>;
   logout: () => void;
   can: (permission: string) => boolean;
+}
+
+export interface SignupBody {
+  organization_name: string;
+  full_name: string;
+  email: string;
+  password: string;
+  industry?: string;
+  size?: string;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -26,7 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     api<User>("/auth/me")
       .then(setUser)
-      .catch(() => setSession(null))
+      .catch((err) => {
+        // Only a rejected token ends the session. A request cancelled by navigation or a network blip must not
+        // sign the person out.
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) setSession(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -41,6 +56,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.user;
   }, []);
 
+  const signup = useCallback(async (body: SignupBody) => {
+    const res = await api<{ access_token: string; refresh_token: string; user: User }>("/orgs/signup", {
+      method: "POST",
+      body,
+      auth: false,
+    });
+    setSession({ access_token: res.access_token, refresh_token: res.refresh_token });
+    setUser(res.user);
+    return res.user;
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setUser(await api<User>("/auth/me"));
+  }, []);
+
   const logout = useCallback(() => {
     setSession(null);
     setUser(null);
@@ -48,8 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, login, logout, can: (p: string) => !!user?.permissions.includes(p) }),
-    [user, loading, login, logout],
+    () => ({ user, loading, login, signup, refresh, logout, can: (p: string) => !!user?.permissions.includes(p) }),
+    [user, loading, login, signup, refresh, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

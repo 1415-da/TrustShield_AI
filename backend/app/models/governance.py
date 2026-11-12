@@ -6,10 +6,11 @@ from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.organization import TenantMixin
 from app.models.base import JSONType, utcnow
 
 
-class GuardrailDecision(Base):
+class GuardrailDecision(TenantMixin, Base):
     __tablename__ = "guardrail_decisions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -25,7 +26,7 @@ class GuardrailDecision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 
-class AuditEvent(Base):
+class AuditEvent(TenantMixin, Base):
     """Append-only, hash-chained audit record. Updates and deletes are rejected (ORM guard + DB trigger)."""
 
     __tablename__ = "audit_events"
@@ -55,7 +56,7 @@ class AuditEvent(Base):
     event_hash: Mapped[str] = mapped_column(String(64), default="")
 
 
-class ReviewCase(Base):
+class ReviewCase(TenantMixin, Base):
     __tablename__ = "review_cases"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -92,7 +93,7 @@ class ReviewCase(Base):
     )
 
 
-class ReviewAction(Base):
+class ReviewAction(TenantMixin, Base):
     __tablename__ = "review_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True)

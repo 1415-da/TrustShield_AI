@@ -23,24 +23,24 @@ export function Hero() {
             Ship AI your security team <em className="text-forest">can trust.</em>
           </h1>
           <p className="mt-7 max-w-xl text-[17px] leading-relaxed text-ink-700">
-            TrustShield sits between your employees and your internal AI assistant. It checks every request before it reaches
-            the model, validates every answer before it reaches a person, routes the hard cases to human reviewers, and keeps
-            a tamper-evident record of every decision.
+            TrustShield sits between your people and your AI — assistants, Slack bots and agents. It checks every request
+            before it reaches the model, validates every answer before it reaches a person, holds risky agent actions for the
+            right approver, and keeps a tamper-evident record of every decision.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
-            <a href="#demo" className={buttonVariants({ size: "lg" })}>Request a demo</a>
-            <Link href="/login" className={cn(buttonVariants({ variant: "secondary", size: "lg" }), "group")}>
-              View live product <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+            <Link href="/demo" className={cn(buttonVariants({ size: "lg" }), "group")}>
+              Try the live demo <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
             </Link>
+            <Link href="/signup" className={buttonVariants({ variant: "secondary", size: "lg" })}>Create your workspace</Link>
           </div>
-          <p className="mt-6 text-[13px] text-ink-500">Self-hosted · OpenAI-compatible · Runs fully offline with a deterministic built-in model</p>
+          <p className="mt-6 text-[13px] text-ink-500">No credit card · Your own isolated workspace in under a minute · Self-hostable</p>
         </div>
 
         <div className="animate-rise [animation-delay:120ms]">
           <div className="rounded-[28px] border border-hair bg-cream-50 p-2 shadow-lift">
             <div className="flex items-center justify-between px-4 pb-2 pt-3">
               <p className="eyebrow">Decision stream</p>
-              <span className="text-[11px] text-ink-400">Illustrative</span>
+              <Link href="/demo" className="text-[11.5px] text-forest hover:underline">Run these yourself →</Link>
             </div>
             <ul className="space-y-1.5">
               {FEED.map((f) => (
