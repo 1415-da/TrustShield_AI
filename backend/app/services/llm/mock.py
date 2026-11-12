@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 import time
 
-from app.core.text import GENERIC_QUERY_TERMS, content_terms, split_sentences
+from app.core.text import GENERIC_QUERY_TERMS, concept, content_terms, split_sentences, stem, tokenize
 from app.services.llm.base import LLMProvider, LLMResponse
 
 _BLOCK_RE = re.compile(r"^\[(\d+)\] (.+?)\n(.*?)(?=^\[\d+\] |\Z)", re.S | re.M)
@@ -53,21 +53,22 @@ class MockProvider(LLMProvider):
                 "so please check with the relevant policy owner before acting."
             )
 
-        q_terms = [t for t in dict.fromkeys(content_terms(prompt)) if t not in GENERIC_QUERY_TERMS]
-        vocab = set(content_terms(" ".join(f"{b[1]} {b[2]}" for b in policy_blocks)))
+        q_terms = [concept(t) for t in dict.fromkeys(content_terms(prompt)) if t not in GENERIC_QUERY_TERMS]
+        q_terms = list(dict.fromkeys(q_terms))
+        vocab = {concept(t) for t in content_terms(" ".join(f"{b[1]} {b[2]}" for b in policy_blocks))}
         missing = [t for t in q_terms if t not in vocab]
 
         scored: list[tuple[float, int, str]] = []
         for rank, (idx, _title, body) in enumerate(policy_blocks):
             for sent in split_sentences(body):
-                terms = set(content_terms(sent))
+                terms = {concept(t) for t in content_terms(sent)}
                 overlap = len(terms & set(q_terms))
                 if overlap:
                     scored.append((overlap + 0.3 / (rank + 1), idx, sent))
         scored.sort(key=lambda s: -s[0])
 
         if q_terms and len(missing) / len(q_terms) >= 0.3 or not scored:
-            topic = ", ".join(missing[:3]) or "this request"
+            topic = ", ".join(_as_typed(prompt, missing[:3])) or "this request"
             hint = scored[0][2] if scored else policy_blocks[0][2].split(".")[0]
             hint = hint.rstrip(".")
             return (
@@ -77,8 +78,10 @@ class MockProvider(LLMProvider):
             )
 
         chosen: list[tuple[int, str]] = []
-        for _score, idx, sent in scored:
-            if len(chosen) == 3:
+        top = scored[0][0]
+        for score, idx, sent in scored:
+            # Supporting points must be about as relevant as the best one, not share a single stray word.
+            if len(chosen) == 3 or score < 0.6 * top:
                 break
             if all(sent != c[1] for c in chosen):
                 chosen.append((idx, sent))
@@ -113,3 +116,12 @@ class MockProvider(LLMProvider):
                     f"Contact: {fields.get('work email', '')}, {fields.get('phone', '')}. [{idx}]"
                 )
         return "\n".join(parts)
+
+
+def _as_typed(prompt: str, terms: list[str]) -> list[str]:
+    """Show the words the person actually typed, not their internal stems ("vacation", not "vac")."""
+    out = []
+    for term in terms:
+        word = next((w for w in tokenize(prompt) if concept(stem(w)) == term), term)
+        out.append(word)
+    return out

@@ -50,6 +50,28 @@ def content_terms(text: str) -> list[str]:
     return [stem(t) for t in tokenize(text) if t not in STOPWORDS and len(t) > 2 and not t.isdigit()]
 
 
+# Everyday words people use for concepts that policies name formally. Keys and values are *stems*
+# (see `stem`), so "vacations", "holidays" and "PTO" all match a policy that only says "annual leave".
+_CONCEPTS = {
+    "leave": ("vac", "holiday", "pto", "timeoff", "leav", "absence", "absent"),
+    "expense": ("reimburse", "reimburs", "claim", "spend", "spent", "receipt"),
+    "travel": ("trip", "flight", "hotel", "travell"),
+    "salary": ("pay", "payroll", "compensation", "ctc", "wage"),
+    "remote": ("wfh", "home", "hybrid", "telework"),
+    "device": ("laptop", "computer", "phone", "hardware"),
+    "password": ("credential", "login", "passcode", "mfa"),
+    "refund": ("return", "chargeback"),
+    "sick": ("ill", "illness", "medical", "unwell"),
+    "vendor": ("supplier", "contractor"),
+}
+CONCEPT_OF = {alias: canon for canon, aliases in _CONCEPTS.items() for alias in (canon, *aliases)}
+
+
+def concept(term: str) -> str:
+    """Map a stemmed term onto its canonical concept, so synonyms compare equal."""
+    return CONCEPT_OF.get(term, term)
+
+
 def numbers_in(text: str) -> set[str]:
     return {n.replace(",", "") for n in re.findall(r"\d[\d,]*(?:\.\d+)?", text) if len(n.replace(",", "")) >= 1}
 
