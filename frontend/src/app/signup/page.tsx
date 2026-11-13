@@ -2,7 +2,6 @@
 
 import { CheckCircle2, Lock } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Logo } from "@/components/brand/logo";
@@ -11,6 +10,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { ErrorState } from "@/components/ui/states";
 import { useAuth } from "@/hooks/useAuth";
 import { ApiError } from "@/lib/api";
+import { hardNavigate } from "@/lib/auth/session";
 
 const INCLUDED = [
   "14 baseline policies enforcing from minute one — injection, PII, cards, credentials, exfiltration",
@@ -21,26 +21,45 @@ const INCLUDED = [
   "Guard API keys to put TrustShield in front of your own LLM apps",
 ];
 
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/;
+type FormKey = "organization_name" | "full_name" | "email" | "password" | "industry" | "size";
+const FIELD_IDS: Record<string, string> = { organization_name: "org", full_name: "name", email: "email", password: "password" };
+
+function validate(f: Record<FormKey, string>): Partial<Record<FormKey, string>> {
+  const e: Partial<Record<FormKey, string>> = {};
+  if (f.organization_name.trim().length < 2) e.organization_name = "Enter your organization's name (at least 2 characters).";
+  if (f.full_name.trim().length < 2) e.full_name = "Enter your name.";
+  if (!EMAIL_RE.test(f.email.trim())) e.email = "Enter a valid work email address.";
+  if (f.password.length < 10) e.password = "Use a password of at least 10 characters.";
+  return e;
+}
+
 export default function SignupPage() {
   const { signup } = useAuth();
-  const router = useRouter();
-  const [form, setForm] = useState({ organization_name: "", full_name: "", email: "", password: "", industry: "", size: "" });
+  const [form, setForm] = useState<Record<FormKey, string>>({ organization_name: "", full_name: "", email: "", password: "", industry: "", size: "" });
+  const [errors, setErrors] = useState<Partial<Record<FormKey, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k: FormKey) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const describe = (k: FormKey) => (errors[k] ? { "aria-invalid": true, "aria-describedby": `${FIELD_IDS[k]}-error` } : {});
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (form.password.length < 10) {
-      setError("Use a password of at least 10 characters.");
-      return;
-    }
-    setBusy(true);
+    if (busy) return;
+    const v = validate(form);
+    setErrors(v);
     setError(null);
+    if (Object.keys(v).length) return;
+    setBusy(true);
     try {
-      await signup(form);
-      router.replace("/console/setup");
+      await signup({ ...form, email: form.email.trim(), organization_name: form.organization_name.trim(), full_name: form.full_name.trim() });
+      hardNavigate("/console/setup"); // stays busy until the workspace opens
     } catch (err) {
+      if (err instanceof ApiError && err.status === 422 && err.details?.length) {
+        const mapped: Partial<Record<FormKey, string>> = {};
+        for (const d of err.details) if (d.field && d.field in FIELD_IDS) mapped[d.field as FormKey] = d.message ?? "Check this field.";
+        setErrors(mapped);
+      }
       setError(err instanceof ApiError ? err.message : "We couldn't create your workspace. Please try again.");
       setBusy(false);
     }
@@ -51,20 +70,20 @@ export default function SignupPage() {
       <main id="main" className="flex flex-col px-6 py-8 sm:px-12">
         <Logo />
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10">
-          <h1 className="text-[40px] leading-tight">Create your workspace</h1>
+          <h1 className="text-[40px] leading-tight">Create workspace</h1>
           <p className="mt-2 text-ink-500">An isolated, governed AI workspace for your organization. You&apos;ll be its first admin.</p>
-          <form onSubmit={submit} className="mt-8 grid gap-4 sm:grid-cols-2" aria-label="Create workspace">
-            <Field label="Organization name" htmlFor="org" className="sm:col-span-2">
-              <Input id="org" required minLength={2} maxLength={120} value={form.organization_name} onChange={set("organization_name")} placeholder="Acme Logistics" autoComplete="organization" />
+          <form onSubmit={submit} className="mt-8 grid gap-4 sm:grid-cols-2" aria-label="Create workspace" noValidate>
+            <Field label="Organization name" htmlFor="org" className="sm:col-span-2" error={errors.organization_name}>
+              <Input id="org" required minLength={2} maxLength={120} value={form.organization_name} onChange={set("organization_name")} placeholder="Acme Logistics" autoComplete="organization" disabled={busy} {...describe("organization_name")} />
             </Field>
-            <Field label="Your name" htmlFor="name">
-              <Input id="name" required minLength={2} value={form.full_name} onChange={set("full_name")} autoComplete="name" />
+            <Field label="Your name" htmlFor="name" error={errors.full_name}>
+              <Input id="name" required minLength={2} value={form.full_name} onChange={set("full_name")} autoComplete="name" disabled={busy} {...describe("full_name")} />
             </Field>
-            <Field label="Work email" htmlFor="email">
-              <Input id="email" type="email" required value={form.email} onChange={set("email")} autoComplete="email" placeholder="you@company.com" />
+            <Field label="Work email" htmlFor="email" error={errors.email}>
+              <Input id="email" type="email" required value={form.email} onChange={set("email")} autoComplete="email" placeholder="you@company.com" disabled={busy} {...describe("email")} />
             </Field>
-            <Field label="Password" htmlFor="password" className="sm:col-span-2">
-              <Input id="password" type="password" required minLength={10} value={form.password} onChange={set("password")} autoComplete="new-password" placeholder="At least 10 characters" />
+            <Field label="Password" htmlFor="password" className="sm:col-span-2" error={errors.password}>
+              <Input id="password" type="password" required minLength={10} value={form.password} onChange={set("password")} autoComplete="new-password" placeholder="At least 10 characters" disabled={busy} {...describe("password")} />
             </Field>
             <Field label="Industry" htmlFor="industry">
               <Select id="industry" value={form.industry} onChange={set("industry")}>
@@ -79,10 +98,10 @@ export default function SignupPage() {
               </Select>
             </Field>
             {error && <div className="sm:col-span-2"><ErrorState message={error} /></div>}
-            <Button type="submit" size="lg" className="sm:col-span-2" loading={busy}>Create workspace</Button>
+            <Button type="submit" size="lg" className="sm:col-span-2" loading={busy} data-testid="create-workspace-submit">{busy ? "Creating workspace…" : "Create workspace"}</Button>
           </form>
           <p className="mt-5 flex items-center gap-2 text-[12.5px] text-ink-500"><Lock className="h-3.5 w-3.5" />Your workspace&apos;s data is isolated from every other organization.</p>
-          <p className="mt-6 text-[13.5px] text-ink-700">Already have an account? <Link href="/login" className="link">Sign in</Link> · <Link href="/demo" className="link">Try the live demo</Link></p>
+          <p className="mt-6 text-[13.5px] text-ink-700">Already have an account? <Link href="/login" className="link">Sign in</Link> · <Link href="/demo" className="link">Live demo</Link></p>
         </div>
       </main>
       <aside className="relative hidden overflow-hidden bg-forest px-12 py-10 text-cream lg:flex lg:flex-col lg:justify-center" aria-label="What's included">

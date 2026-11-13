@@ -28,7 +28,9 @@ export default function SetupPage() {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [origin, setOrigin] = useState("https://your-trustshield-host");
-  useEffect(() => setOrigin(window.location.origin), []);
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
   useEffect(() => { if (org.data) setName(org.data.name); }, [org.data]);
 
   const rename = async () => {

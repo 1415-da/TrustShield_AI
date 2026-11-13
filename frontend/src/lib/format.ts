@@ -29,17 +29,8 @@ export function slaRemaining(dueIso: string, now: number = Date.now()): { label:
   return { label: ms < 0 ? `${text} overdue` : `${text} left`, overdue: ms < 0, urgent: ms >= 0 && ms < 60 * 60000 };
 }
 
-export const ROLE_LABELS: Record<string, string> = {
-  employee: "Employee",
-  hr_manager: "HR Manager",
-  finance_analyst: "Finance Analyst",
-  finance_head: "Finance Head",
-  people_manager: "People Manager",
-  compliance_reviewer: "Compliance Reviewer",
-  security_admin: "Security Admin",
-  security_auditor: "Security / Audit",
-  trustshield_admin: "TrustShield Admin",
-};
+// Role names come from the single source of truth in lib/roles.ts.
+export { ROLE_LABELS } from "@/lib/roles";
 
 export const ENTITY_LABELS: Record<string, string> = {
   EMAIL_ADDRESS: "Email address",

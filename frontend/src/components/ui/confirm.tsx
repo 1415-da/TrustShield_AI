@@ -5,6 +5,8 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Textarea } from "@/components/ui/field";
+import { useToast } from "@/components/ui/toast";
+import { ApiError } from "@/lib/api";
 
 /** Confirmation for consequential actions. Optionally collects a note that is kept in the audit trail. */
 export function ConfirmDialog({
@@ -45,4 +47,34 @@ export function ConfirmDialog({
       </div>
     </Dialog>
   );
+}
+
+interface ConfirmRequest {
+  title: string;
+  description?: ReactNode;
+  confirmLabel: string;
+  success: string;
+  action: () => Promise<unknown>;
+}
+
+/**
+ * The standard pattern for destructive actions: confirm → run → success toast, or error toast with the dialog kept
+ * open. `ask({...})` opens the dialog; render `dialog` once in the page.
+ */
+export function useConfirm(): { ask: (r: ConfirmRequest) => void; dialog: ReactNode } {
+  const [req, setReq] = useState<ConfirmRequest | null>(null);
+  const toast = useToast();
+  const dialog = req ? (
+    <ConfirmDialog open onClose={() => setReq(null)} title={req.title} description={req.description} confirmLabel={req.confirmLabel} tone="danger"
+      onConfirm={async () => {
+        try {
+          await req.action();
+          toast({ tone: "success", title: req.success });
+        } catch (e) {
+          toast({ tone: "error", title: e instanceof ApiError ? e.message : "Something went wrong. Please try again." });
+          throw e;
+        }
+      }} />
+  ) : null;
+  return { ask: setReq, dialog };
 }

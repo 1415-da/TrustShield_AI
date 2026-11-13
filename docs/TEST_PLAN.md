@@ -24,7 +24,7 @@
 | Release 3 — organizations, isolation, playground, Guard API | pytest | `test_organizations.py` | 20 | No |
 | End-to-end — UI flows | Playwright | `frontend/tests/e2e/` | 15 | Yes (running stack) |
 
-**Total: 217 backend tests + 15 Playwright tests.** Backend tests use SQLite in-memory and the offline model, so they run in ~9 seconds with no network, Slack workspace, or Docker.
+**Total: 225 backend tests + 17 Playwright tests** (including a regression test that the assistant survives browser page translation during a live review decision, and role tests: everyone is Employee + one job role, only Compliance Reviewers decide held answers, the admin approves nothing). Run the Playwright suite with `E2E_CHANNEL=chrome` to also test the installed Google Chrome. Backend tests use SQLite in-memory and the offline model, so they run in ~9 seconds with no network, Slack workspace, or Docker.
 
 ## 3. Evaluation suite (Test Center)
 
@@ -126,3 +126,74 @@ The in-app **Test Center** (`/console/tests`) runs the same 49 scenarios against
 - Real Slack delivery is tested with signed requests through the real Bolt app and a captured notifier; posting to an actual Slack workspace requires credentials and is a manual check (`POST /api/integrations/slack/test`).
 - Agent executors run against in-process systems of record. Integration tests against real finance/HR systems belong with each real executor.
 - The agent action classifier is deterministic and covers the catalogue's phrasing; unrecognised requests return NEEDS_INFO rather than guessing.
+
+## 9. Authentication, navigation, permission and isolation matrices
+
+Backend: `backend/app/tests/test_auth.py`, `test_roles.py`, `test_organizations.py`. Browser: `frontend/tests/e2e/auth-navigation.spec.ts`.
+
+### 9.1 Authentication
+
+| # | Scenario | Expected | Test |
+|---|---|---|---|
+| A1 | Valid sign-in | 200; HttpOnly access + refresh cookies, readable CSRF cookie; `auth.login` audited | BE `test_valid_login_sets_http_only_session_cookies`, `test_login_and_failed_login_are_audited` |
+| A2 | Wrong password / unknown email | Same 401 `INVALID_CREDENTIALS` "Incorrect email or password." | BE `test_wrong_password_and_unknown_email…`; PW `invalid sign-in shows a clear error…` |
+| A3 | Repeated failures | 429 `RATE_LIMITED`; successful sign-ins aren't counted | BE `test_failed_logins_are_rate_limited…` |
+| A4 | No token / malformed / expired / wrong `iss` / wrong `aud` / refresh-as-access | 401 `UNAUTHENTICATED` | BE `test_protected_endpoint_without_token_is_401`, `test_malformed_token_is_401`, `test_expired_wrong_issuer…` |
+| A5 | Refresh via cookie | New access token; session must be live | BE `test_refresh_with_cookie…`; manual: middleware renews an expired access cookie |
+| A6 | Sign-out | 204; session revoked (old access **and** refresh tokens → 401); cookies cleared; `auth.logout` audited | BE `test_logout_revokes_every_token…`; PW `sign-out clears the session everywhere…` |
+| A7 | Cookie-authenticated write without CSRF header | 403 `CSRF_FAILED`; bearer API clients exempt | BE `test_cookie_authenticated_writes_require_the_csrf_header`, `test_bearer_clients_are_not_subject_to_csrf` |
+| A8 | Deactivated person | All sessions revoked; next request 401 | BE `test_deactivated_user_loses_access_immediately` |
+| A9 | Self-registration into an existing workspace | Not possible (endpoint removed) | BE `test_self_registration_into_an_existing_workspace_is_not_possible` |
+| A10 | Signed-out visit to a protected page | `/login?next=<page>`, then back to it after sign-in | PW `signed-out visit to a protected page…` |
+| A11 | `/login` while signed in | "Already signed in as …" with Continue / Sign out; never a silent redirect | PW `sign-in page never silently continues…` |
+| A12 | Refresh the page | Still signed in; no token in `localStorage` | PW `session survives a refresh…` |
+| A13 | `next=//evil.example` | Ignored; role home | PW `unsafe return addresses are ignored` |
+| A14 | Demo account buttons | Only fill in the form; `/api/auth/me` stays 401 until **Sign in** | PW `live demo personas open the sign-in form…` |
+| A15 | Submit button during sign-in | Disabled, shows "Signing in…" | PW `the sign-in button is disabled while submitting` |
+
+### 9.2 Navigation
+
+| Control | Destination | Test |
+|---|---|---|
+| Create workspace / Sign in / Live demo / Docs (site nav) | `/signup`, `/login`, `/demo`, `/docs` | PW `public links…` |
+| Policy Studio / Audit log / Users & roles (sidebar) | `/console/policies`, `/console/audit`, `/console/users` | PW `console links go where they say` |
+| Assistant / Connected workspace / Open console | `/assistant`, `/workspace`, `/console` | PW `console links go where they say` |
+| Open app (site nav, signed in) | the person's role home | code: `homeFor(user)` |
+| Sign out (every shell) | revoke → `/login` | PW `sign-out clears…` |
+| Logo inside the app | the person's role home | code: `Logo href={homeFor(user)}` |
+
+### 9.3 Permissions
+
+| Role | Lands on | Can open | Gets "No access" for | Test |
+|---|---|---|---|---|
+| Employee | `/assistant` | Assistant, Connected workspace | all of `/console/*` | PW `employee review-queue links are absent…`, `employees cannot open the governance console` |
+| Compliance Reviewer | `/console/reviews` | Reviews, Policy Studio, approvals, evidence, knowledge sources | Users & roles, Audit log | PW `the sidebar shows only permitted links…` |
+| Finance Head | `/console/agents` | Agent approvals, evidence | Policy Studio, Users | PW role landing |
+| Security Auditor | `/console/audit` | Audit, overview, read-only console | Users, Apps, Test center | PW role landing |
+| TrustShield Admin | `/console` | Everything except deciding | — (can't decide reviews; can't approve anything) | BE `test_admin_cannot_decide_a_review_case`, `test_admin_runs_the_workspace_but_approves_nothing` |
+| Any role, API | — | — | 403 `AUTHORIZATION_DENIED`, audited | BE `test_employee_cannot_open_review_queue_and_the_attempt_is_audited` |
+| Separation of duties | — | — | Policy author can't approve own policy; agent requester can't approve own action | BE `test_separation_of_duties`, `test_agent_requester_cannot_approve_their_own_action` |
+
+### 9.4 Workspace isolation
+
+Organization B (new workspace admin) against Organization A (NovaCorp) records:
+
+| Record | Read by id | Change | Appears in lists | Test |
+|---|---|---|---|---|
+| Policies, documents | 404 | — | no | BE `test_new_workspace_sees_none_of_novacorps_data` |
+| Users | — | 404 | no | BE `test_no_cross_workspace_access_to_any_record_type` |
+| Conversations, review cases, agent actions, evidence reports | 403/404 | — | no | same |
+| Connected apps, API keys | — | 404 | no | same; `test_app_keys_only_work_in_their_own_workspace` |
+| Audit events | — | — | no; each workspace has its own chain | same; `test_each_workspace_has_its_own_verifiable_audit_chain` |
+| Workspace of a request | from the session only; `X-Organization-Id` ignored; unscoped request queries raise | — | — | BE `test_workspace_comes_from_the_session_not_the_client` |
+
+### 9.5 Regression checklist (before each release)
+
+- [ ] `cd backend && .venv/bin/python -m pytest` (all green)
+- [ ] `docker compose up -d --build`, then `scripts/check_ports.sh`
+- [ ] `cd frontend && E2E_BASE_URL=http://localhost:3200 E2E_CHANNEL=chrome npx playwright test` (bundled Chromium **and** installed Chrome)
+- [ ] Sign in manually as each persona; check the landing page and sidebar
+- [ ] Sign out; Back button; open `/console` (must ask to sign in)
+- [ ] Two tabs: sign out in one, the other follows
+- [ ] A review approval and an agent approval end to end
+- [ ] No "synthetic / demo data / sample data / mock / test data" copy (PW `no user-facing page mentions…`)

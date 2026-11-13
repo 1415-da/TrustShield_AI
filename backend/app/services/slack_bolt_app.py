@@ -15,6 +15,9 @@ from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.services import workspace
 
+from app.core.tenancy import use_org  # noqa: E402
+from app.models.organization import DEFAULT_ORG_ID  # noqa: E402
+
 log = logging.getLogger("trustshield.slack")
 
 
@@ -22,6 +25,8 @@ def _on_message(body: dict, event: dict) -> None:
     if event.get("bot_id") or event.get("subtype"):  # ignore bot echoes, edits, joins
         return
     with SessionLocal() as db:
+        # The Slack app is connected to the platform (NovaCorp) workspace; bind it explicitly.
+        use_org(db, DEFAULT_ORG_ID)
         user = workspace.resolve_slack_user(db, event.get("user", ""))
         channel = workspace.channel_for_slack(db, event.get("channel", ""))
         text = (event.get("text") or "").split(">", 1)[-1].strip() if event.get("type") == "app_mention" else (event.get("text") or "")

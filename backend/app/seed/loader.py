@@ -135,6 +135,8 @@ def ensure_roles(db: Session) -> dict[str, Role]:
             existing[r["key"]] = role
         else:
             role.permissions = sorted(set(role.permissions or []) | set(r["permissions"]))
+            # Names and descriptions are platform-defined; keep them identical to the defaults everywhere.
+            role.name, role.description = r["name"], r["description"]
     db.flush()
     return existing
 

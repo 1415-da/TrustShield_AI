@@ -23,12 +23,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   );
 });
 
-export function Field({ label, hint, htmlFor, children, className }: { label: string; hint?: ReactNode; htmlFor?: string; children: ReactNode; className?: string }) {
+/** Label + control + hint + field error. The error renders as `<id>-error`; point the control's aria-describedby at it. */
+export function Field({ label, hint, htmlFor, error, children, className }: { label: string; hint?: ReactNode; htmlFor?: string; error?: string; children: ReactNode; className?: string }) {
   return (
     <div className={cn("space-y-1.5", className)}>
       <label htmlFor={htmlFor} className="block text-[12.5px] font-medium text-ink-700">{label}</label>
       {children}
-      {hint && <p className="text-[12px] leading-snug text-ink-500">{hint}</p>}
+      {error && <p id={htmlFor ? `${htmlFor}-error` : undefined} role="alert" className="text-[12px] font-medium leading-snug text-crimson-700">{error}</p>}
+      {hint && !error && <p className="text-[12px] leading-snug text-ink-500">{hint}</p>}
     </div>
   );
 }

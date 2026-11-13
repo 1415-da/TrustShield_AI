@@ -13,9 +13,15 @@ export const USERS = {
 
 export async function login(page: Page, email: string): Promise<void> {
   await page.goto("/login");
+  // Signing in as someone else from a signed-in tab goes through "Sign out and use another account".
+  if (await page.getByTestId("already-signed-in").isVisible().catch(() => false)) {
+    await page.getByTestId("switch-account").click();
+    await page.waitForURL(/\/login/);
+    await expect(page.getByTestId("sign-in-submit")).toBeVisible();
+  }
   await page.fill("#email", email);
   await page.fill("#password", PASSWORD);
-  await page.click("button[type=submit]");
+  await page.getByTestId("sign-in-submit").click();
   await expect(page).not.toHaveURL(/\/login/);
 }
 

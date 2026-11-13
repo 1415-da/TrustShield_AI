@@ -22,7 +22,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 30
     refresh_token_days: int = 7
-    allow_self_registration: bool = True
+    jwt_issuer: str = "trustshield"
+    jwt_audience: str = "trustshield-app"
+    # Session cookies. `cookie_secure` defaults to True in production; set COOKIE_SECURE=true behind HTTPS elsewhere.
+    cookie_secure: bool | None = None
+    cookie_samesite: str = "lax"
     demo_user_password: str = "TrustShield-demo-2024"
 
     # LLM

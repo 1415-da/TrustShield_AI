@@ -58,28 +58,83 @@ PUBLIC_APP_URL=http://localhost:3200
 | Page | What it is |
 |---|---|
 | `/` | Product site with live decision counts and a Guard API snippet |
-| `/demo` | Public guardrail playground against the NovaCorp workspace, plus one-click sign-in as any persona |
+| `/demo` | Public guardrail playground against the NovaCorp workspace, plus NovaCorp accounts that open the sign-in form pre-filled (you still sign in) |
 | `/signup` | An organization creates its own isolated workspace and becomes its first admin |
 | `/console/setup` | Onboarding checklist, workspace settings and a ready-to-run Guard API call |
 | `/docs` | 14-page documentation: quickstart, decisions, policies, review, agent actions, evidence, Guard API, Assistant API, Slack, self-hosting, roles, security |
 
 Tenant isolation is enforced in the ORM (`app/core/tenancy.py`): every business table has `organization_id`; reads are filtered and inserts stamped automatically from the signed-in user or app key. Existing data becomes workspace 1 (NovaCorp) via migration `0006`.
 
+### Authentication, roles and sign-in flow
+
+TrustShield behaves like a standard SaaS sign-in. Nobody is ever signed in automatically.
+
+1. Open http://localhost:3200 and click **Sign in** (or open a protected page — you're sent to `/login?next=<that page>`).
+2. Enter email and password. The API sets three cookies:
+   - `trustshield_access_token`: HTTP-only, 30 minutes.
+   - `trustshield_refresh_token`: HTTP-only, 7 days.
+   - `trustshield_csrf`: readable by the page, echoed as `X-CSRF-Token` on every write.
+   No token is ever stored in `localStorage`.
+3. You land on the page you asked for (if your role may open it) or on your role's home:
+
+| Role | Lands on |
+|---|---|
+| Employee, HR Manager, Finance Analyst | `/assistant` |
+| People Manager, Finance Head, Security Admin | `/console/agents` (approvals tab) |
+| Compliance Reviewer | `/console/reviews` |
+| Security Auditor | `/console/audit` |
+| TrustShield Admin | `/console` |
+
+4. **Refresh / come back later:** the middleware renews an expired access token from the refresh cookie before the page renders, so you stay signed in.
+5. **Sign out:**
+   - It revokes the server-side session, so every token from it stops working immediately, and clears the cookies.
+   - Other open tabs sign out too, and the Back button can't show a protected page.
+6. **Opening `/login` while signed in** shows *"Already signed in as …"* with **Continue** or **Sign out and use another account**. It never silently continues as whoever used the browser last.
+
+**Route protection has three layers:**
+- `middleware.ts` gives a fast redirect to sign-in;
+- the server layouts (`ProtectedArea`) check the session with the API and the route's permission before rendering, and render "No access" for pages your role lacks;
+- every API endpoint enforces permissions independently: 401 for no session, 403 `AUTHORIZATION_DENIED` for missing permissions. Denials are audited (`auth.access_denied`).
+
+**Workspaces:**
+- Every account belongs to exactly one workspace, and an email address can only exist once.
+- The workspace is resolved on the server from the signed-in account on every request; it's never taken from the browser and never defaulted.
+- So there is no workspace picker: a person never has more than one workspace to choose from (see `docs/BUG_AUDIT.md`, WS-2).
+
+**The "Live demo" accounts** on `/demo` and `/login` only *fill in* the sign-in form. You still press **Sign in**.
+
+**Environment variables (auth):**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `JWT_SECRET` | `change-me` | Token signing key. **Change it in any shared environment.** |
+| `COOKIE_SECURE` | `false` | Set `true` behind HTTPS so session cookies are marked `Secure`. |
+| `ACCESS_TOKEN_MINUTES` / `REFRESH_TOKEN_DAYS` | `30` / `7` | Token lifetimes. |
+| `JWT_ISSUER` / `JWT_AUDIENCE` | `trustshield` / `trustshield-app` | Validated on every token. |
+
+**Troubleshooting sign-in:**
+- **Sent back to sign-in on every page:** you're probably serving over plain HTTP with `COOKIE_SECURE=true`. Set it to `false`, or use HTTPS.
+- **"Your session could not be verified" (403 `CSRF_FAILED`):** the CSRF cookie is missing. Refresh the page, or sign out and in again.
+- **"Too many sign-in attempts" (429):** 10 failed attempts for one email in 5 minutes, or 20 from one network in a minute. Wait for the window to pass.
+- **Server-to-server clients:** call `POST /api/auth/login` and send `Authorization: Bearer <access_token>`. Bearer requests aren't subject to CSRF.
+
 ### Demo accounts
 
-Password for all accounts: `TrustShield-demo-2024` (set via `DEMO_USER_PASSWORD`). The login page also has one-click demo sign-in.
+Password for all accounts: `TrustShield-demo-2024` (set via `DEMO_USER_PASSWORD`). On the login page, choosing an account fills in the form; you still press **Sign in**.
 
-| Person | Role | What to try |
-|---|---|---|
-| ananya.rao@novacorp.test | Employee | Ask policy questions; try asking for a colleague's salary |
-| neha.kapoor@novacorp.test | HR Manager | Same salary question, different outcome (has `data:compensation`) |
-| rahul.verma@novacorp.test | Finance Analyst | Ask in `#finance-help`; request agent actions (refunds, reimbursements) |
-| kavya.menon@novacorp.test | Compliance Reviewer | Review queue, **policy approvals**, Evidence Center |
-| sanjay.gupta@novacorp.test | Security / Audit Viewer | Audit log, analytics, chain verification (read-only) |
-| rohan.das@novacorp.test | TrustShield Admin | Draft and activate policies, Slack settings, agent approval rules (can't approve his own changes) |
-| vivek.raman@novacorp.test | Finance Head | Approve high-value agent actions (refunds over INR 10,000, reimbursements over INR 50,000) |
-| aditya.kulkarni@novacorp.test | People Manager | Approve mid-value reimbursements and record updates |
-| tara.bose@novacorp.test | Security Admin | Approve access revocations, deletions and escalated actions |
+Everyone holds **Employee** plus one job role. Each kind of approval belongs to exactly one role, and nobody approves their own request.
+
+| Person | Job role | Approves | Lands on | What to try |
+|---|---|---|---|---|
+| ananya.rao@novacorp.test | Employee | — | Assistant | Ask policy questions; ask for a colleague's salary (blocked); ask a legal question (held for review) |
+| neha.kapoor@novacorp.test | HR Manager | Salary changes | Assistant | Same salary question, different outcome (has `data:compensation`) |
+| rahul.verma@novacorp.test | Finance Analyst | — | Assistant | Ask in `#finance-help`; request refunds and reimbursements |
+| aditya.kulkarni@novacorp.test | People Manager | Reimbursements INR 5,000–50,000, leave and record updates | Agent approvals | Approve "Arjun Mehta's expense reimbursement" (INR 18,500) |
+| vivek.raman@novacorp.test | Finance Head | Reimbursements > INR 50,000, vendor refunds > INR 10,000 | Agent approvals | Approve "Refund INV-2291" (INR 18,000) |
+| tara.bose@novacorp.test | Security Admin | Access revocations, deletions, permission changes | Agent approvals | Approve "Revoke access for Vikram Singh" |
+| kavya.menon@novacorp.test | Compliance Reviewer | Held answers, policy versions, exceptions, external messages | Review queue | Approve, edit or reject held answers; approve policy changes |
+| sanjay.gupta@novacorp.test | Security Auditor | — (read-only) | Audit log | Verify the audit chain; read dashboards and evidence |
+| rohan.das@novacorp.test | TrustShield Admin | — (runs the workspace, approves nothing) | Console | Draft policies, manage users, apps, Slack and agent approval rules |
 
 The 5-minute walkthrough of every feature is in **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)**.
 
@@ -188,7 +243,7 @@ docs/      PRODUCT_ONE_PAGER · PRD · ARCHITECTURE · API · TEST_PLAN · DEMO_
 - Messages, review cases, and audit details store **masked** text. Raw content is kept only as a SHA-256 hash.
 - API keys are shown once and stored as hashes. Settings never return secrets.
 - **Change `JWT_SECRET` before exposing a deployment.** The console shows a warning while it is still the default.
-- MVP trade-off: JWTs are kept in `localStorage`. Production should use httpOnly SameSite cookies.
+- Sessions use HTTP-only, SameSite=Lax cookies with server-side revocation, CSRF double-submit tokens, `iss`/`aud`-validated JWTs, and rate-limited sign-in.
 
 ---
 
@@ -217,7 +272,7 @@ Guardrail recall and false-positive rate on an expanding labelled set, gateway o
 - Agent executors write to in-process systems of record. Real integrations (Jira, ERP, HRIS) implement the same `ActionExecutor` interface.
 - The report scheduler runs in-process; run it on one backend replica (`SCHEDULER_ENABLED=false` on the others).
 - Real Slack posting can only be verified with your own workspace credentials. Automated tests use signed requests through Bolt and a captured notifier.
-- JWTs live in `localStorage`; production should use httpOnly cookies. No SSO, multi-tenancy, or billing by design.
+- No SSO or billing. One workspace per account (no cross-workspace membership).
 
 ### Roadmap
 pgvector ANN retrieval → in-Slack approvals for agent actions → OIDC SSO and SCIM → shadow-mode policy versions → real system-of-record executors → pluggable ML classifiers → signed evidence packages and SIEM export.

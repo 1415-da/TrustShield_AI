@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarClock, FileCheck2, Library, Wand2 } from "lucide-react";
+import { useConfirm } from "@/components/ui/confirm";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -25,6 +26,7 @@ const PRESETS = [[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last quarter"]]
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 export default function EvidenceCenterPage() {
+  const confirm = useConfirm();
   const { can } = useAuth();
   const writable = can("compliance:write");
   const router = useRouter();
@@ -72,6 +74,7 @@ export default function EvidenceCenterPage() {
 
   return (
     <>
+      {confirm.dialog}
       <PageHeader eyebrow="Compliance Evidence Center" title="Audit-ready evidence, in minutes"
         description="Generate governance reports from audit records. Every report is immutable, hashed, reproducible, and traceable to the events it was built from."
         actions={writable && <Button onClick={() => setTab("builder")}><FileCheck2 className="h-4 w-4" />Generate report</Button>} />
@@ -198,7 +201,7 @@ export default function EvidenceCenterPage() {
                   {s.last_report_id && <Link className="link" href={`/console/evidence/${s.last_report_id}`}>Latest report</Link>}
                 </div>
                 <Badge tone={s.is_active ? "sage" : "neutral"}>{s.is_active ? "Active" : "Cancelled"}</Badge>
-                {writable && s.is_active && <Button size="sm" variant="ghost" onClick={async () => { await api(`/compliance/schedules/${s.id}`, { method: "DELETE" }); toast({ tone: "success", title: "Schedule cancelled" }); void schedules.reload(); }}>Cancel</Button>}
+                {writable && s.is_active && <Button size="sm" variant="ghost" onClick={() => confirm.ask({ title: "Cancel this schedule?", description: "No further reports will be generated on this schedule. Existing reports are kept.", confirmLabel: "Cancel schedule", success: "Schedule cancelled", action: async () => { await api(`/compliance/schedules/${s.id}`, { method: "DELETE" }); await schedules.reload(); } })}>Cancel schedule</Button>}
               </li>
             ))}
           </ul>

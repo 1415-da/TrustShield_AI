@@ -28,13 +28,16 @@ def test_login_me_and_refresh(client):
 
 def test_bad_login_is_401_with_structured_error(client):
     r = client.post("/api/auth/login", json={"email": "ananya.rao@novacorp.test", "password": "nope"})
-    assert r.status_code == 401 and r.json()["error"]["code"] == "unauthorized" and r.json()["error"]["request_id"]
+    err = r.json()["error"]
+    assert r.status_code == 401 and err["code"] == "INVALID_CREDENTIALS" and err["request_id"] and err["details"] == []
+    assert err["message"] == "Incorrect email or password."
 
 
-def test_register_creates_employee(client):
+def test_self_registration_into_an_existing_workspace_is_not_possible(client):
+    # Accounts are created by creating a workspace or by an admin — never by joining NovaCorp anonymously.
     r = client.post("/api/auth/register", json={"email": "new.joiner@novacorp.test", "password": "a-long-password-1",
                                                 "full_name": "New Joiner"})
-    assert r.status_code == 201 and r.json()["user"]["role_keys"] == ["employee"]
+    assert r.status_code in (404, 405)
 
 
 @pytest.mark.parametrize("path", ["/api/admin/policies", "/api/admin/audit-events", "/api/reviewer/cases", "/api/admin/users"])
@@ -94,7 +97,7 @@ def test_simulate_unsaved_draft_policy(client, headers):
 def test_invalid_rule_is_rejected(client, headers):
     bad = {**NEW_POLICY, "name": "Bad Regex", "rules": [{"rule_type": "regex", "match_field": "user_input", "pattern": "("}]}
     r = client.post("/api/admin/policies", json=bad, headers=headers["admin"])
-    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+    assert r.status_code == 422 and r.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 # ------------------------------------------------------------------ documents

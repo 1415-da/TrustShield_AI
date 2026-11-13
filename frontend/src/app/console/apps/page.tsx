@@ -1,6 +1,7 @@
 "use client";
 
 import { Copy, KeyRound, Plus } from "lucide-react";
+import { useConfirm } from "@/components/ui/confirm";
 import { useState, type FormEvent } from "react";
 
 import { PageHeader, Section } from "@/components/console/shell";
@@ -17,6 +18,7 @@ import type { ConnectedApp } from "@/lib/types";
 const FIRST_PARTY = ["novacorp-assistant-web", "web-assistant"];
 
 export default function AppsPage() {
+  const confirm = useConfirm();
   const apps = useApi<ConnectedApp[]>("/admin/apps");
   const [newKey, setNewKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -33,6 +35,7 @@ export default function AppsPage() {
 
   return (
     <>
+      {confirm.dialog}
       <PageHeader eyebrow="Integrations" title="Connected apps" description="Apps that send employee requests through TrustShield. Every request is attributed to its app in the audit log." actions={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />Connect app</Button>} />
       {error && <div className="mb-4"><ErrorState message={error} /></div>}
       {apps.loading ? <LoadingRows rows={3} /> : (
@@ -46,7 +49,7 @@ export default function AppsPage() {
                   <li key={k.id} className="flex items-center justify-between gap-3 rounded-xl border border-hair bg-white/50 px-3 py-2 text-[13px]">
                     <span className="flex items-center gap-2"><KeyRound className="h-4 w-4 text-ink-400" /><span className="font-mono">{k.prefix}…</span><span className="text-ink-500">{k.name}</span></span>
                     <span className="flex items-center gap-2 text-[12px] text-ink-500">
-                      {k.revoked_at ? <Badge tone="crimson">revoked</Badge> : <>{k.last_used_at ? `used ${timeAgo(k.last_used_at)}` : "never used"}<Button size="sm" variant="ghost" onClick={() => void run(() => api(`/admin/apps/${a.id}/keys/${k.id}/revoke`, { method: "POST" }))}>Revoke</Button></>}
+                      {k.revoked_at ? <Badge tone="crimson">revoked</Badge> : <>{k.last_used_at ? `used ${timeAgo(k.last_used_at)}` : "never used"}<Button size="sm" variant="ghost" onClick={() => confirm.ask({ title: `Revoke key ${k.prefix}…?`, description: "Apps using this key will be rejected immediately. This cannot be undone.", confirmLabel: "Revoke key", success: "Key revoked", action: () => run(() => api(`/admin/apps/${a.id}/keys/${k.id}/revoke`, { method: "POST" })) })}>Revoke</Button></>}
                     </span>
                   </li>
                 ))}

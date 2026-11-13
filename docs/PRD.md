@@ -28,7 +28,7 @@ Point solutions (DLP proxies, prompt firewalls, eval tools) each cover one slice
 | **Employee** (e.g. Ananya, Operations) | Uses the AI assistant | Fast, correct answers; understands when and why something is blocked |
 | **Compliance Reviewer** (e.g. Kavya, Legal) | Works the human-review queue | Clear evidence to make a decision quickly; defensible record |
 | **TrustShield Admin** (e.g. Rohan, IT/Security) | Owns policies, documents, users, apps | Change rules without engineering; test before rollout |
-| **Security / Audit Viewer** (e.g. Sanjay, InfoSec) | Read-only oversight | Tamper-evident audit log, risk analytics, no ability to change policy |
+| **Security Auditor** (e.g. Sanjay, InfoSec) | Read-only oversight | Tamper-evident audit log, risk analytics, no ability to change policy |
 | **HR Manager / Finance Analyst** | Privileged employees | Access to data their role legitimately needs — and nothing more |
 
 ## 3. Jobs to be done

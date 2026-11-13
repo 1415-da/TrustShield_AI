@@ -10,14 +10,6 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
-class RegisterRequest(BaseModel):
-    # Plain pattern rather than EmailStr: email-validator rejects reserved TLDs such as .test used by the demo.
-    email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$", max_length=255)
-    password: str = Field(min_length=10, max_length=200)
-    full_name: str = Field(min_length=2, max_length=200)
-    department: str = Field(default="General Operations", max_length=120)
-
-
 class RefreshRequest(BaseModel):
     refresh_token: str
 

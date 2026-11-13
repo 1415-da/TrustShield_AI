@@ -64,7 +64,7 @@ def test_amount_thresholds(client, headers):
 def test_high_value_refund_requires_finance_head_then_executes_once(client, headers, db):
     a = request(client, headers, "finance", "Issue a refund for vendor invoice INV-2291")
     assert a["status"] == "PENDING_APPROVAL" and a["required_approver_role"] == "finance_head" and a["executed_at"] is None
-    assert "approval from Finance Head" in a["employee_view"]["headline"]
+    assert "approval from the Finance Head" in a["employee_view"]["headline"]
     pending = client.get("/api/agent/actions?scope=approvals", headers=headers["finance_head"]).json()
     assert a["id"] in [x["id"] for x in pending]
     done = act(client, headers, "finance_head", a["id"], "approve", "Duplicate invoice confirmed").json()

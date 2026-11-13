@@ -11,6 +11,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
+import { useConfirm } from "@/components/ui/confirm";
 import { api, ApiError } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { DocumentDetail, DocumentItem } from "@/lib/types";
@@ -53,14 +54,16 @@ export default function DocumentsPage() {
   };
 
   const reindex = async (id: number) => { await api(`/admin/documents/${id}/reindex`, { method: "POST" }); await docs.reload(); };
-  const remove = async (d: DocumentItem) => {
-    if (!window.confirm(`Delete “${d.title}”? It will no longer be used to answer questions.`)) return;
-    await api(`/admin/documents/${d.id}`, { method: "DELETE" });
-    await docs.reload();
-  };
+  const confirm = useConfirm();
+  const remove = (d: DocumentItem) => confirm.ask({
+    title: `Delete “${d.title}”?`, description: "It will no longer be used to answer questions. This is recorded in the audit log.",
+    confirmLabel: "Delete document", success: "Document deleted",
+    action: async () => { await api(`/admin/documents/${d.id}`, { method: "DELETE" }); await docs.reload(); },
+  });
 
   return (
     <>
+      {confirm.dialog}
       <PageHeader eyebrow="Retrieval" title="Knowledge sources" description="Policy documents the assistant answers from. Each is chunked, embedded, and cited in answers." />
       <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
         <div>

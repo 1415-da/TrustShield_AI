@@ -16,12 +16,12 @@ USERS: list[dict] = [
     {"email": "lakshmi.pillai@novacorp.test", "full_name": "Lakshmi Pillai", "department": "HR", "title": "HR Coordinator", "roles": ["employee"]},
     {"email": "neha.kapoor@novacorp.test", "full_name": "Neha Kapoor", "department": "HR", "title": "HR Manager", "roles": ["employee", "hr_manager"]},
     {"email": "rahul.verma@novacorp.test", "full_name": "Rahul Verma", "department": "Finance", "title": "Finance Analyst", "roles": ["employee", "finance_analyst"]},
-    {"email": "kavya.menon@novacorp.test", "full_name": "Kavya Menon", "department": "Legal", "title": "Compliance Analyst", "roles": ["compliance_reviewer"]},
-    {"email": "farah.khan@novacorp.test", "full_name": "Farah Khan", "department": "Legal", "title": "Senior Compliance Counsel", "roles": ["compliance_reviewer"]},
-    {"email": "sanjay.gupta@novacorp.test", "full_name": "Sanjay Gupta", "department": "IT", "title": "Security Auditor", "roles": ["security_auditor"]},
+    {"email": "kavya.menon@novacorp.test", "full_name": "Kavya Menon", "department": "Legal", "title": "Compliance Analyst", "roles": ["employee", "compliance_reviewer"]},
+    {"email": "farah.khan@novacorp.test", "full_name": "Farah Khan", "department": "Legal", "title": "Senior Compliance Counsel", "roles": ["employee", "compliance_reviewer"]},
+    {"email": "sanjay.gupta@novacorp.test", "full_name": "Sanjay Gupta", "department": "IT", "title": "Security Auditor", "roles": ["employee", "security_auditor"]},
     {"email": "vivek.raman@novacorp.test", "full_name": "Vivek Raman", "department": "Finance", "title": "Head of Finance", "roles": ["employee", "finance_head"]},
     {"email": "tara.bose@novacorp.test", "full_name": "Tara Bose", "department": "IT", "title": "Security Administrator", "roles": ["employee", "security_admin"]},
-    {"email": "rohan.das@novacorp.test", "full_name": "Rohan Das", "department": "IT", "title": "AI Platform Lead", "roles": ["trustshield_admin", "compliance_reviewer"]},
+    {"email": "rohan.das@novacorp.test", "full_name": "Rohan Das", "department": "IT", "title": "AI Platform Lead", "roles": ["employee", "trustshield_admin"]},
 ]
 
 # --------------------------------------------------------------------------- synthetic directory (24)

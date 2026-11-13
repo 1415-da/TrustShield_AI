@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/components/ui/confirm";
 
 import { PageHeader, Section } from "@/components/console/shell";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +14,33 @@ import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import { api, ApiError } from "@/lib/api";
 import { ROLE_LABELS, timeAgo } from "@/lib/format";
+import { ROLES } from "@/lib/roles";
 import type { Role, User } from "@/lib/types";
 
+/** Employee is always held; pick at most one job role on top. Each option says what that role approves. */
+function RolePicker({ value, onChange, name }: { value: string[]; onChange: (keys: string[]) => void; name: string }) {
+  const job = value.find((k) => k !== "employee") ?? "";
+  const options = [{ key: "", label: "No job role", approves: "Uses the assistant and requests actions only" },
+    ...ROLES.filter((r) => r.key !== "employee").map((r) => ({ key: r.key, label: r.label, approves: r.approves === "—" ? r.purpose : `Approves: ${r.approves}` }))];
+  return (
+    <div>
+      <p className="mb-1 text-[12.5px] font-medium text-ink-700">Role</p>
+      <p className="mb-2 text-[12px] text-ink-500">Everyone is an <strong>Employee</strong>. Choose one job role on top.</p>
+      <div role="radiogroup" aria-label="Job role" className="max-h-[300px] space-y-1 overflow-y-auto pr-1">
+        {options.map((o) => (
+          <label key={o.key || "none"} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2 text-[13px] transition ${job === o.key ? "border-forest bg-forest-50" : "border-hair hover:border-forest/30"}`}>
+            <input type="radio" name={name} className="mt-1 accent-forest" checked={job === o.key}
+              onChange={() => onChange(o.key ? ["employee", o.key] : ["employee"])} data-testid={`role-${o.key || "none"}`} />
+            <span><span className="font-medium">{o.label}</span><span className="block text-[12px] text-ink-500">{o.approves}</span></span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function UsersPage() {
+  const confirm = useConfirm();
   const { user: me } = useAuth();
   const users = useApi<User[]>("/admin/users");
   const roles = useApi<Role[]>("/admin/roles");
@@ -69,6 +94,7 @@ export default function UsersPage() {
 
   return (
     <>
+      {confirm.dialog}
       <PageHeader eyebrow="Access" title="Users & roles" description="Roles carry permission scopes. Data scopes (compensation, financial) control what the assistant may reveal to whom."
         actions={<Button onClick={() => { setInviteError(null); setInviting(true); }} data-testid="invite-user">Add person</Button>} />
       {error && <div className="mb-4"><ErrorState message={error} /></div>}
@@ -84,11 +110,11 @@ export default function UsersPage() {
                     <td className="text-ink-700">{u.department}</td>
                     <td>
                       <button onClick={() => { setEditing(u); setRoleDraft(u.role_keys); }} className="flex flex-wrap gap-1 text-left" aria-label={`Edit roles for ${u.full_name}`}>
-                        {u.role_keys.map((k) => <Badge key={k} tone={k === "trustshield_admin" ? "forest" : "neutral"}>{ROLE_LABELS[k] ?? k}</Badge>)}
+                        {[...u.role_keys].sort((a, b) => Number(a === "employee") - Number(b === "employee")).map((k) => <Badge key={k} tone={k === "trustshield_admin" ? "forest" : k === "employee" ? "neutral" : "lilac"}>{ROLE_LABELS[k] ?? k}</Badge>)}
                       </button>
                     </td>
                     <td className="text-ink-500">{u.last_login_at ? timeAgo(u.last_login_at) : "Never"}</td>
-                    <td className="text-right"><Switch checked={u.is_active} onChange={(v) => void patchUser(u, { is_active: v })} label={`${u.full_name} active`} disabled={u.id === me?.id} /></td>
+                    <td className="text-right"><Switch checked={u.is_active} onChange={(v) => (v ? void patchUser(u, { is_active: true }) : confirm.ask({ title: `Deactivate ${u.full_name}?`, description: "They are signed out everywhere immediately and can't sign in until reactivated.", confirmLabel: "Deactivate", success: `${u.full_name} deactivated`, action: () => patchUser(u, { is_active: false }) }))} label={`${u.full_name} active`} disabled={u.id === me?.id} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -122,15 +148,7 @@ export default function UsersPage() {
           <Field label="Full name" htmlFor="inv-name"><Input id="inv-name" required minLength={2} value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} /></Field>
           <Field label="Work email" htmlFor="inv-email"><Input id="inv-email" type="email" required value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} /></Field>
           <Field label="Department" htmlFor="inv-dept"><Input id="inv-dept" value={invite.department} onChange={(e) => setInvite({ ...invite, department: e.target.value })} /></Field>
-          <div>
-            <p className="mb-1.5 text-[12.5px] font-medium text-ink-700">Roles</p>
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              {Object.entries(ROLE_LABELS).map(([k, v]) => (
-                <Checkbox key={k} checked={invite.role_keys.includes(k)} label={v}
-                  onChange={(on) => setInvite({ ...invite, role_keys: on ? [...invite.role_keys, k] : invite.role_keys.filter((x) => x !== k) })} />
-              ))}
-            </div>
-          </div>
+          <RolePicker name="invite-role" value={invite.role_keys} onChange={(role_keys) => setInvite({ ...invite, role_keys })} />
           <Field label="Temporary password" htmlFor="inv-pw" hint="At least 10 characters. Share it with them over a secure channel.">
             <Input id="inv-pw" required minLength={10} value={invite.temporary_password} onChange={(e) => setInvite({ ...invite, temporary_password: e.target.value })} className="font-mono" />
           </Field>
@@ -140,9 +158,7 @@ export default function UsersPage() {
       </Dialog>
       <Dialog open={!!editing} onClose={() => setEditing(null)} title={`Roles for ${editing?.full_name ?? ""}`}>
         <div className="space-y-2">
-          {Object.entries(ROLE_LABELS).map(([k, v]) => (
-            <Checkbox key={k} checked={roleDraft.includes(k)} label={v} onChange={(on) => setRoleDraft(on ? [...roleDraft, k] : roleDraft.filter((x) => x !== k))} />
-          ))}
+          <RolePicker name="edit-role" value={roleDraft} onChange={setRoleDraft} />
           <Button className="mt-4 w-full" disabled={!roleDraft.length} onClick={() => editing && void patchUser(editing, { role_keys: roleDraft })}>Save roles</Button>
         </div>
       </Dialog>

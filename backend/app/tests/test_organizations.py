@@ -248,3 +248,30 @@ def test_guard_calls_are_audited_in_the_keys_workspace(client: TestClient, acme:
     nova = client.get("/api/admin/audit-events?page_size=200", headers=headers["admin"]).json()["items"]
     assert not any(e["event_type"].startswith("api.guard") for e in nova)
     assert client.get("/api/admin/audit-events/verify", headers=acme["h"]).json()["valid"] is True
+
+
+def test_no_cross_workspace_access_to_any_record_type(client: TestClient, acme: dict, headers: dict) -> None:
+    """Organization A cannot read or change Organization B's records, even by guessing ids."""
+    nova, h = headers, acme["h"]
+    chat = client.post("/api/assistant/chat", json={"message": "Can I sue a vendor who delivered late?"}, headers=nova["employee"]).json()
+    action = client.post("/api/agent/actions", json={"request": "Issue a refund for vendor invoice INV-2318"}, headers=nova["finance"]).json()
+    report = client.get("/api/compliance/reports", headers=nova["reviewer"]).json()
+    nova_user = next(u for u in client.get("/api/admin/users", headers=nova["admin"]).json() if u["email"] == "ananya.rao@novacorp.test")
+    nova_app = client.get("/api/admin/apps", headers=nova["admin"]).json()[0]
+
+    reads = [f"/api/assistant/conversations/{chat['conversation_id']}", f"/api/reviewer/cases/{chat['decision']['review_case_id']}",
+             f"/api/agent/actions/{action['id']}"]
+    if report:
+        reads.append(f"/api/compliance/reports/{report[0]['id']}")
+    for path in reads:
+        assert client.get(path, headers=h).status_code in (403, 404), path
+    # writes against another workspace's records
+    assert client.patch(f"/api/admin/users/{nova_user['id']}", json={"is_active": False}, headers=h).status_code == 404
+    assert client.patch(f"/api/admin/apps/{nova_app['id']}", json={"status": "disabled"}, headers=h).status_code in (404, 422)
+    # lists never include the other workspace
+    assert all(a["id"] != nova_app["id"] for a in client.get("/api/admin/apps", headers=h).json())
+    audit = client.get("/api/admin/audit-events", headers=h).json()
+    events = audit["items"] if isinstance(audit, dict) else audit
+    assert all((e.get("actor_email") or "").endswith("novacorp.test") is False for e in events)
+    assert client.get("/api/agent/actions", headers=h).json() in ([], {"items": []}) or all(
+        a["id"] != action["id"] for a in (client.get("/api/agent/actions", headers=h).json()))

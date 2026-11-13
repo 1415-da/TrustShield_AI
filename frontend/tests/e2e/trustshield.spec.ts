@@ -6,7 +6,7 @@ test("landing page presents the product and links to the live demo", async ({ pa
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Ship AI your security team");
   await expect(page.getByRole("link", { name: "Create workspace" }).first()).toBeVisible();
-  await page.getByRole("link", { name: /Try the live demo/ }).first().click();
+  await page.getByRole("link", { name: /^Live demo/ }).first().click();
   await expect(page).toHaveURL(/\/demo/);
 });
 
@@ -28,9 +28,13 @@ test("live demo playground runs prompts through the real guardrails", async ({ p
   await expect(result.getByTestId("llm-called")).toHaveText("Called with the sanitized prompt");
 });
 
-test("live demo persona buttons sign in to the NovaCorp workspace", async ({ page }) => {
+test("live demo personas open the sign-in form but never sign in automatically", async ({ page }) => {
   await page.goto("/demo");
   await page.getByTestId("enter-compliance-reviewer").click();
+  await expect(page).toHaveURL(/\/login\?account=/);
+  await expect(page.locator("#email")).toHaveValue("kavya.menon@novacorp.test");
+  expect((await page.request.get("/api/auth/me")).status()).toBe(401);
+  await page.getByTestId("sign-in-submit").click();
   await expect(page).toHaveURL(/\/console\/reviews/);
   await expect(page.getByTestId("org-switcher")).toContainText("NovaCorp");
 });
@@ -53,7 +57,7 @@ test("an organization creates its own isolated workspace", async ({ page }) => {
 
   // Nothing from NovaCorp is visible here.
   await page.goto("/console/users");
-  await expect(page.getByText("Maya Chen")).toBeVisible();
+  await expect(page.locator("main").getByText("Maya Chen")).toBeVisible(); // the sidebar also shows the signed-in name
   await expect(page.getByText("rohan.das@novacorp.test")).toHaveCount(0);
   await page.goto("/console/documents");
   await expect(page.getByText("International Vendor Refund Policy")).toHaveCount(0);
@@ -107,7 +111,8 @@ test("personal data in a prompt is masked before storage and the model", async (
 test("employees cannot open the governance console", async ({ page }) => {
   await login(page, USERS.employee);
   await page.goto("/console/policies");
-  await expect(page).toHaveURL(/\/assistant/);
+  await expect(page.getByTestId("no-access")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Go to your home page" })).toHaveAttribute("href", "/assistant");
 });
 
 test("policy lifecycle: draft → review → approve by a second person → activate", async ({ browser }) => {
@@ -173,7 +178,56 @@ test("reviewer approves a held answer and the employee receives it", async ({ pa
   expect(delivered.explanation.reviewed.decision).toBe("approved");
 });
 
-test("compliance lead generates, verifies and exports an evidence report", async ({ page }) => {
+/**
+ * Browser translation (and extensions such as Grammarly) replace the text nodes React owns. This used to crash
+ * the assistant with "Failed to execute 'removeChild' on 'Node'" the moment a reviewer's decision arrived.
+ */
+const SIMULATE_PAGE_TRANSLATION = () => {
+  const wrap = (root: Node) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    while (walker.nextNode()) {
+      const n = walker.currentNode as Text;
+      if (n.nodeValue?.trim() && n.parentElement && !n.parentElement.closest("font,script,style,textarea,title")) nodes.push(n);
+    }
+    for (const n of nodes) {
+      if (!n.parentNode) continue;
+      const outer = document.createElement("font");
+      const inner = document.createElement("font");
+      inner.textContent = n.nodeValue;
+      outer.appendChild(inner);
+      n.parentNode.replaceChild(outer, n);
+    }
+  };
+  window.addEventListener("DOMContentLoaded", () => {
+    wrap(document.body);
+    new MutationObserver(() => setTimeout(() => wrap(document.body), 50)).observe(document.body, { childList: true, subtree: true });
+  });
+};
+
+test("a translated assistant page survives a live review decision", async ({ page, request }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript(SIMULATE_PAGE_TRANSLATION);
+  await login(page, USERS.employee);
+  await expect(page).toHaveURL(/\/assistant/);
+  await ask(page, "Can I sue a vendor who delivered late?");
+  await expect(page.getByTestId("assistant-message").last()).toHaveAttribute("data-trust", "needs_review");
+
+  const token = await apiToken(request, USERS.reviewer);
+  const cases = await (await request.get("/api/reviewer/cases?status=open", { headers: { Authorization: `Bearer ${token}` } })).json();
+  const mine = cases.filter((c: { prompt_masked: string }) => c.prompt_masked.startsWith("Can I sue")).sort((a: { id: number }, b: { id: number }) => b.id - a.id)[0];
+  const approved = await request.post(`/api/reviewer/cases/${mine.id}/approve`, { headers: { Authorization: `Bearer ${token}` }, data: { note: "ok" } });
+  expect(approved.ok()).toBeTruthy();
+
+  // The employee's page polls, receives the decision and redraws — without crashing.
+  await expect(page.getByTestId("assistant-message").last()).toHaveAttribute("data-trust", "verified", { timeout: 15000 });
+  await expect(page.getByText("Reviewed by Compliance").last()).toBeVisible();
+  await expect(page.getByText(/Something went wrong|Application error/)).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("compliance reviewer generates, verifies and exports an evidence report", async ({ page }) => {
   await login(page, USERS.reviewer);
   await page.goto("/console/evidence");
   await page.getByRole("tab", { name: "Report builder" }).click();
@@ -194,6 +248,8 @@ test("connected workspace answers through the same guardrails", async ({ page })
   await login(page, USERS.employee);
   await page.goto("/workspace?channel=finance-help");
   await expect(page.getByTestId("channel-hint")).toContainText("Finance profile");
+  // Let the channel history finish loading before counting messages, or the count races the history fetch.
+  await page.waitForLoadState("networkidle");
   const send = async (text: string) => {
     const before = await page.getByTestId("ws-item").count();
     await page.getByTestId("ws-input").fill(text);
@@ -217,7 +273,7 @@ test("agent action: high-value refund needs Finance Head approval, then executes
   await analyst.keyboard.press("Enter");
   const card = analyst.getByTestId("action-card").last();
   await expect(card).toHaveAttribute("data-status", "PENDING_APPROVAL");
-  await expect(card).toContainText("requires approval from Finance Head");
+  await expect(card).toContainText("requires approval from the Finance Head");
 
   const head = await browser.newPage();
   await login(head, USERS.financeHead);
@@ -239,4 +295,20 @@ test("auditor can verify the hash-chained audit log", async ({ page }) => {
   await expect(page.getByTestId("audit-table")).toBeVisible();
   await page.getByRole("button", { name: "Verify chain" }).click();
   await expect(page.getByTestId("chain-status")).toContainText("Chain intact");
+});
+
+test("roles: the admin can view a held case but only a Compliance Reviewer can decide it", async ({ page, request }) => {
+  const token = await apiToken(request, USERS.employee);
+  const chat = await (await request.post("/api/assistant/chat", {
+    headers: { Authorization: `Bearer ${token}` }, data: { message: "Can I sue a vendor who delivered late?" },
+  })).json();
+  await login(page, USERS.admin);
+  await page.goto(`/console/reviews/${chat.decision.review_case_id}`);
+  await expect(page.getByTestId("case-prompt")).toContainText("sue a vendor");
+  await expect(page.getByTestId("approve")).toHaveCount(0);
+
+  await page.goto("/console/users");
+  const row = page.locator("main").getByText("Rohan Das").locator("xpath=ancestor::tr[1]");
+  await expect(row).toContainText("TrustShield Admin");
+  await expect(row).not.toContainText("Compliance Reviewer");
 });

@@ -1,8 +1,7 @@
 "use client";
 
-import { ArrowUp, ExternalLink, Hash, Hourglass, LayoutDashboard, LogOut, Menu, MessageSquareText, ShieldCheck, ShieldX, X } from "lucide-react";
+import { ArrowUp, ExternalLink, Hash, Hourglass, LayoutDashboard, Menu, MessageSquareText, ShieldCheck, ShieldX, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { RichText } from "@/components/assistant/message";
@@ -10,7 +9,9 @@ import { ShieldMark } from "@/components/brand/logo";
 import { TrustBadge } from "@/components/trust/badges";
 import { Badge } from "@/components/ui/badge";
 import { ErrorState, Skeleton } from "@/components/ui/states";
-import { CONSOLE_PERMISSIONS, useAuth } from "@/hooks/useAuth";
+import { SignOutButton } from "@/components/auth/sign-out-button";
+import { hasConsole, useAuth } from "@/hooks/useAuth";
+import { hardNavigate } from "@/lib/auth/session";
 import { useApi } from "@/hooks/useApi";
 import { api, ApiError } from "@/lib/api";
 import { ENTITY_LABELS, timeAgo } from "@/lib/format";
@@ -90,8 +91,7 @@ function Item({ item }: { item: WorkspaceItem }) {
 }
 
 export default function WorkspacePage() {
-  const { user, loading, logout, can } = useAuth();
-  const router = useRouter();
+  const { user, loading } = useAuth();
   const channels = useApi<WorkspaceChannel[]>(user ? "/workspace/channels" : null);
   const [active, setActive] = useState<WorkspaceChannel | null>(null);
   const [items, setItems] = useState<WorkspaceItem[]>([]);
@@ -104,8 +104,8 @@ export default function WorkspacePage() {
   const feed = useApi<WorkspaceItem[]>(active ? `/workspace/channels/${active.id}/messages` : null, pending ? 5000 : 15000);
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login?next=/workspace");
-  }, [loading, user, router]);
+    if (!loading && !user) hardNavigate("/login?next=/workspace");
+  }, [loading, user]);
   useEffect(() => {
     if (!active && channels.data?.length) {
       const wanted = new URLSearchParams(window.location.search).get("channel");
@@ -113,7 +113,9 @@ export default function WorkspacePage() {
     }
   }, [channels.data, active]);
   useEffect(() => { if (feed.data) setItems(feed.data); }, [feed.data]);
-  useEffect(() => bottom.current?.scrollIntoView({ block: "end" }), [items.length, active?.id]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: "end" }); // block body: never return scrollIntoView's Promise to React
+  }, [items.length, active?.id]);
 
   const send = async () => {
     if (!active || !text.trim()) return;
@@ -153,11 +155,11 @@ export default function WorkspacePage() {
         ))}
       </nav>
       <div className="space-y-1 border-t border-cream/15 p-3 text-[13px]">
-        <Link href="/assistant" className="flex items-center gap-2 rounded-xl px-3 py-2 text-cream/80 hover:bg-cream/[0.08]"><MessageSquareText className="h-4 w-4" />Private assistant</Link>
-        {CONSOLE_PERMISSIONS.some(can) && <Link href="/console" className="flex items-center gap-2 rounded-xl px-3 py-2 text-cream/80 hover:bg-cream/[0.08]"><LayoutDashboard className="h-4 w-4" />Console</Link>}
+        <Link href="/assistant" className="flex items-center gap-2 rounded-xl px-3 py-2 text-cream/80 hover:bg-cream/[0.08]" data-testid="nav-assistant"><MessageSquareText className="h-4 w-4" />Assistant</Link>
+        {hasConsole(user.permissions) && <Link href="/console" className="flex items-center gap-2 rounded-xl px-3 py-2 text-cream/80 hover:bg-cream/[0.08]" data-testid="nav-console"><LayoutDashboard className="h-4 w-4" />Open console</Link>}
         <div className="flex items-center justify-between rounded-xl px-3 py-2">
           <span className="min-w-0"><span className="block truncate font-medium">{user.full_name}</span><span className="text-[11.5px] text-cream/60">{user.department}</span></span>
-          <button onClick={logout} className="rounded-full p-2 text-cream/70 hover:bg-cream/10" aria-label="Sign out"><LogOut className="h-4 w-4" /></button>
+          <SignOutButton className="text-cream/70 hover:bg-cream/10" />
         </div>
       </div>
     </div>

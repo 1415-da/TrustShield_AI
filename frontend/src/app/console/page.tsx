@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { DecisionTimeline, RankedBars } from "@/components/console/charts";
-import { firstAllowed, PageHeader, Section, Stat } from "@/components/console/shell";
+import { PageHeader, Section, Stat } from "@/components/console/shell";
+import { firstConsolePage, OVERVIEW_PERMISSION } from "@/lib/auth/permissions";
 import { Badge } from "@/components/ui/badge";
 import { ErrorState, LoadingRows, Skeleton } from "@/components/ui/states";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,15 +15,15 @@ import { humanize, minutes, pct } from "@/lib/format";
 import type { GuardrailStats, Overview, ReviewStats } from "@/lib/types";
 
 export default function OverviewPage() {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const router = useRouter();
-  const allowed = can("analytics:read");
+  const allowed = can(OVERVIEW_PERMISSION);
   useEffect(() => {
-    if (!allowed) {
-      const next = firstAllowed(can);
-      if (next && next !== "/console") router.replace(next);
+    if (user && !allowed) {
+      const next = firstConsolePage(user.permissions);
+      if (next) router.replace(next);
     }
-  }, [allowed, can, router]);
+  }, [allowed, user, router]);
 
   const overview = useApi<Overview>(allowed ? "/admin/analytics/overview" : null);
   const guard = useApi<GuardrailStats>(allowed ? "/admin/analytics/guardrails" : null);

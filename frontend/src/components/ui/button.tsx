@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { Children, forwardRef, isValidElement, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -26,6 +26,12 @@ const buttonVariants = cva(
   },
 );
 
+/** Plain-text content of a label, used to give each distinct label its own DOM nodes. */
+function labelText(node: ReactNode): string {
+  return Children.toArray(node).map((c) => (typeof c === "string" || typeof c === "number" ? String(c)
+    : isValidElement<{ children?: ReactNode }>(c) ? labelText(c.props.children) : "")).join("");
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   loading?: boolean;
 }
@@ -37,7 +43,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   return (
     <button ref={ref} className={cn(buttonVariants({ variant, size }), className)} disabled={disabled || loading} {...props}>
       {loading && <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />}
-      {children}
+      {/* Keyed by the label text: when a label changes (Approve → Send edited answer) React draws new text
+          instead of editing the old node, which page translators may have replaced and would leave stale. */}
+      <span key={labelText(children)} className="contents">{children}</span>
     </button>
   );
 });

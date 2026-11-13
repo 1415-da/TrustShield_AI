@@ -135,12 +135,12 @@ export default function ReviewCasePage() {
                 <p className="text-[12.5px] text-ink-500">Suggested: <span className="font-medium text-ink">{humanize(c.suggested_action.toLowerCase())}</span></p>
                 <Field label="Reviewer note" htmlFor="note"><Textarea id="note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why you decided this (kept in the audit trail)" /></Field>
                 {editing ? (
-                  <div className="flex gap-2">
+                  <div key="editing" className="flex gap-2">
                     <Button className="flex-1" onClick={() => void act("edit")} loading={busy === "edit"} disabled={!edited.trim()}><Check className="h-4 w-4" />Send edited answer</Button>
                     <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div key="deciding" className="grid grid-cols-2 gap-2">
                     <Button onClick={() => void act("approve")} loading={busy === "approve"} data-testid="approve"><Check className="h-4 w-4" />Approve</Button>
                     <Button variant="secondary" onClick={() => void act("reject")} loading={busy === "reject"}><X className="h-4 w-4" />Reject</Button>
                     <Button variant="secondary" className="col-span-2" onClick={() => void act("escalate")} loading={busy === "escalate"} disabled={c.status === "ESCALATED"}><ShieldAlert className="h-4 w-4" />Escalate to security</Button>

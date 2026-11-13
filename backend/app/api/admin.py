@@ -14,7 +14,7 @@ from app.core.deps import require_permission
 from app.core.errors import BadRequest, Conflict, Forbidden, NotFound
 from app.core.tenancy import org_id
 from app.models.organization import DEFAULT_ORG_ID
-from app.core.permissions import PERMISSION_CATALOGUE
+from app.core.permissions import PERMISSION_CATALOGUE, normalize_role_keys
 from app.core.security import generate_api_key
 from app.guardrails.pii import get_pii_detector
 from app.models import ApiKey, ConnectedApp, Role, User
@@ -45,14 +45,23 @@ def update_user(user_id: int, body: UserUpdate, admin: User = Depends(can_users)
         raise BadRequest("You cannot remove your own admin access")
     changes: dict = {}
     if body.role_keys is not None:
-        roles = list(db.scalars(select(Role).where(Role.key.in_(body.role_keys))))
-        if len(roles) != len(set(body.role_keys)) or not roles:
+        try:
+            keys = normalize_role_keys(body.role_keys)
+        except ValueError as e:
+            raise BadRequest(str(e)) from e
+        found = {r.key: r for r in db.scalars(select(Role).where(Role.key.in_(keys)))}
+        if len(found) != len(keys):
             raise BadRequest("Unknown role")
+        roles = [found[k] for k in keys]
         changes["roles"] = {"from": target.role_keys, "to": [r.key for r in roles]}
         target.roles = roles
     if body.is_active is not None and body.is_active != target.is_active:
         changes["is_active"] = body.is_active
         target.is_active = body.is_active
+        if not body.is_active:
+            from app.services import sessions
+
+            changes["sessions_revoked"] = sessions.revoke_all(db, target.id, "deactivated")
     if changes:
         audit.record(db, "user.updated", **audit.actor_fields(admin), details={"user_id": target.id, **changes})
     db.commit()
@@ -161,6 +170,6 @@ def gateway_settings(_: User = Depends(can_settings)) -> dict:
                        "vector_store": "PostgreSQL JSON + in-process cosine (pgvector on roadmap)"},
         "pii": {"engine": get_pii_detector().engine_name, "spacy_model": s.spacy_model},
         "auth": {"access_token_minutes": s.access_token_minutes, "refresh_token_days": s.refresh_token_days,
-                 "self_registration": s.allow_self_registration, "jwt_secret_is_default": s.jwt_secret == "change-me"},
+                 "session": "HTTP-only cookies, server-side revocation", "jwt_secret_is_default": s.jwt_secret == "change-me"},
         "thresholds_note": "Guardrail thresholds are policy rules — edit them in Policy Studio.",
     }

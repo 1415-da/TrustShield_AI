@@ -11,7 +11,8 @@ const TRUST: Record<TrustStatus, { label: string; tone: BadgeTone; Icon: typeof 
 };
 
 export function TrustBadge({ status, warning }: { status: TrustStatus; warning?: boolean }) {
-  const t = TRUST[status];
+  // An unrecognised status (e.g. from a newer backend) shows as "Needs review" rather than breaking the page.
+  const t = TRUST[status] ?? TRUST.needs_review;
   return (
     <Badge tone={warning && status === "verified" ? "amber" : t.tone} data-testid="trust-badge" data-status={status}>
       {warning && status === "verified" ? <AlertCircle className="h-3.5 w-3.5" /> : <t.Icon className="h-3.5 w-3.5" />}

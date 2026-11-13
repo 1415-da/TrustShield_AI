@@ -29,9 +29,9 @@ export function Hero() {
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <Link href="/demo" className={cn(buttonVariants({ size: "lg" }), "group")}>
-              Try the live demo <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+              Live demo <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
             </Link>
-            <Link href="/signup" className={buttonVariants({ variant: "secondary", size: "lg" })}>Create your workspace</Link>
+            <Link href="/signup" className={buttonVariants({ variant: "secondary", size: "lg" })}>Create workspace</Link>
           </div>
           <p className="mt-6 text-[13px] text-ink-500">No credit card · Your own isolated workspace in under a minute · Self-hostable</p>
         </div>

@@ -10,8 +10,8 @@ import type { ChatMessage, Citation, Explanation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** Renders assistant text: paragraphs, "- " bullets, [n] citation markers and <MASKED> tokens. */
-export function RichText({ text }: { text: string }) {
-  const lines = text.split("\n");
+export function RichText({ text }: { text: string | null | undefined }) {
+  const lines = (text ?? "").split("\n");
   const blocks: JSX.Element[] = [];
   let bullets: string[] = [];
   const flush = () => {
@@ -37,8 +37,8 @@ export function RichText({ text }: { text: string }) {
   return <>{blocks}</>;
 }
 
-function inline(s: string) {
-  return s.split(/(\[\d+\]|<[A-Z_]+>)/g).map((part, i) => {
+function inline(s: string | null | undefined) {
+  return (s ?? "").split(/(\[\d+\]|<[A-Z_]+>)/g).map((part, i) => {
     if (/^\[\d+\]$/.test(part)) return <sup key={i} className="ml-0.5 rounded bg-forest-50 px-1 text-[10.5px] font-semibold text-forest">{part.slice(1, -1)}</sup>;
     const m = part.match(/^<([A-Z_]+)>$/);
     if (m) return <span key={i} className="mx-0.5 rounded-md bg-lilac px-1.5 py-px text-[12px] font-medium text-lilac-700" title="Masked by TrustShield">{ENTITY_LABELS[m[1]] ?? m[1]} hidden</span>;
@@ -46,9 +46,9 @@ function inline(s: string) {
   });
 }
 
-function Sources({ citations }: { citations: Citation[] }) {
+function Sources({ citations }: { citations: Citation[] | null | undefined }) {
   const [open, setOpen] = useState<number | null>(null);
-  if (!citations.length) return null;
+  if (!citations?.length) return null;
   return (
     <div className="mt-3">
       <p className="eyebrow mb-2 flex items-center gap-1.5"><BookOpen className="h-3 w-3" />Sources</p>
@@ -66,7 +66,7 @@ function Sources({ citations }: { citations: Citation[] }) {
       </div>
       {citations.filter((c) => c.index === open).map((c) => (
         <blockquote key={c.index} className="mt-2 rounded-xl border-l-2 border-forest bg-forest-50/60 px-4 py-3 text-[13px] leading-relaxed text-ink-700 animate-rise">
-          {c.snippet}{c.snippet.length >= 270 ? "…" : ""}
+          {c.snippet}{(c.snippet?.length ?? 0) >= 270 ? "…" : ""}
         </blockquote>
       ))}
     </div>
@@ -85,18 +85,18 @@ function WhyPanel({ explanation, status }: { explanation: Explanation; status: s
       {open && (
         <div className="space-y-3 border-t border-hair px-3.5 py-3 text-[13px] leading-relaxed text-ink-700" data-testid="why-panel">
           <p className="font-medium text-ink">{explanation.headline}</p>
-          {explanation.policies.map((p) => (
+          {(explanation.policies ?? []).map((p) => (
             <div key={p.id} className="rounded-lg bg-cream-200/60 px-3 py-2">
               <p className="text-[12.5px] font-semibold text-ink">{p.name}</p>
               {p.reason && <p className="mt-0.5">{p.reason}</p>}
             </div>
           ))}
-          {explanation.redactions.length > 0 && (
-            <p>Masked before reaching the model or you: {explanation.redactions.map((r) => `${ENTITY_LABELS[r.entity_type] ?? r.entity_type}${r.count > 1 ? ` ×${r.count}` : ""}`).join(", ")}.</p>
+          {(explanation.redactions?.length ?? 0) > 0 && (
+            <p>Masked before reaching the model or you: {(explanation.redactions ?? []).map((r) => `${ENTITY_LABELS[r.entity_type] ?? r.entity_type}${r.count > 1 ? ` ×${r.count}` : ""}`).join(", ")}.</p>
           )}
           {explanation.suggestion && <p className="text-forest">{explanation.suggestion}</p>}
-          {explanation.confidence !== null && (
-            <p className="text-[12px] text-ink-500">Grounding confidence {explanation.confidence.toFixed(2)} — {explanation.confidence_label.toLowerCase()}.</p>
+          {typeof explanation.confidence === "number" && (
+            <p className="text-[12px] text-ink-500">Grounding confidence {explanation.confidence.toFixed(2)}{explanation.confidence_label ? ` — ${explanation.confidence_label.toLowerCase()}` : ""}.</p>
           )}
         </div>
       )}
@@ -143,7 +143,7 @@ export function MessageView({ message }: { message: ChatMessage }) {
           <Sources citations={message.citations} />
         </div>
         {e && (status !== "verified" || e.warning) && <WhyPanel explanation={e} status={status} />}
-        <p className="mt-1.5 font-mono text-[10.5px] text-ink-300">req {message.request_id.slice(0, 12)}</p>
+        {message.request_id && <p className="mt-1.5 font-mono text-[10.5px] text-ink-300">req {message.request_id.slice(0, 12)}</p>}
       </div>
     </div>
   );

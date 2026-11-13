@@ -1,16 +1,18 @@
 "use client";
 
-import { Hash, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, X } from "lucide-react";
+import { Hash, LayoutDashboard, Menu, Plus, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Composer, type ComposerMode } from "@/components/assistant/composer";
 import { MessageView } from "@/components/assistant/message";
 import { Logo } from "@/components/brand/logo";
 import { Dot } from "@/components/ui/badge";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { ErrorState, Skeleton } from "@/components/ui/states";
-import { CONSOLE_PERMISSIONS, useAuth } from "@/hooks/useAuth";
+import { SignOutButton } from "@/components/auth/sign-out-button";
+import { hasConsole, homeFor, useAuth } from "@/hooks/useAuth";
+import { hardNavigate } from "@/lib/auth/session";
 import { useApi } from "@/hooks/useApi";
 import { api, ApiError } from "@/lib/api";
 import { readableMasks, ROLE_LABELS, timeAgo } from "@/lib/format";
@@ -32,9 +34,8 @@ function greeting(): string {
 }
 
 export default function AssistantPage() {
-  const { user, loading, logout, can } = useAuth();
+  const { user, loading, can } = useAuth();
   const orgName = user?.organization?.name ?? "Your organization";
-  const router = useRouter();
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -51,9 +52,8 @@ export default function AssistantPage() {
     if (c) setActiveId(c);
   }, []);
   useEffect(() => {
-    if (!loading && !user) router.replace("/login?next=/assistant");
-    else if (!loading && user && !can("assistant:use")) router.replace("/console");
-  }, [loading, user, can, router]);
+    if (!loading && !user) hardNavigate("/login?next=/assistant");
+  }, [loading, user]);
 
   const convs = useApi<ConversationSummary[]>(user ? "/assistant/conversations" : null);
   const hasPending = messages.some((m) => m.status === "pending_review");
@@ -65,7 +65,11 @@ export default function AssistantPage() {
   useEffect(() => {
     if (!hasPending && activeId) void convs.reload();
   }, [hasPending]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages.length, sending]);
+  // Block body on purpose: newer Chrome returns a Promise from scrollIntoView, and React would treat a returned
+  // value as the effect's cleanup function ("n is not a function").
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages.length, sending]);
 
   const send = useCallback(async (text?: string) => {
     const prompt = (text ?? draft).trim();
@@ -116,7 +120,7 @@ export default function AssistantPage() {
   const sidebar = (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-5 pb-4 pt-5">
-        <Logo href="/assistant" />
+        <Logo href={homeFor(user)} />
         <button className="rounded-full p-1.5 hover:bg-ink/5 lg:hidden" onClick={() => setDrawer(false)} aria-label="Close menu"><X className="h-4 w-4" /></button>
       </div>
       <div className="px-3">
@@ -137,22 +141,22 @@ export default function AssistantPage() {
             <Dot className={cn("mt-2", STATUS_DOT[c.last_trust_status ?? "verified"])} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13.5px]">{readableMasks(c.title)}</span>
-              <span className="block text-[11.5px] text-ink-400">{c.pending_reviews ? "Awaiting review · " : ""}{timeAgo(c.updated_at)}</span>
+              <span className="block text-[11.5px] text-ink-400">{c.pending_reviews ? <span>Awaiting review · </span> : null}<span>{timeAgo(c.updated_at)}</span></span>
             </span>
           </button>
         ))}
       </nav>
       <div className="border-t border-hair p-3">
-        <Link href="/workspace" className="mb-1 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]" data-testid="open-workspace"><Hash className="h-4 w-4" />Team channels</Link>
-        {CONSOLE_PERMISSIONS.some(can) && (
-          <Link href="/console" className="mb-1 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]"><LayoutDashboard className="h-4 w-4" />Open console</Link>
+        <Link href="/workspace" className="mb-1 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]" data-testid="open-workspace"><Hash className="h-4 w-4" />Connected workspace</Link>
+        {hasConsole(user.permissions) && (
+          <Link href="/console" className="mb-1 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]" data-testid="nav-console"><LayoutDashboard className="h-4 w-4" />Open console</Link>
         )}
         <div className="flex items-center justify-between rounded-xl px-3 py-2">
           <div className="min-w-0">
             <p className="truncate text-[13.5px] font-medium">{user.full_name}</p>
             <p className="text-[11.5px] text-ink-500">{ROLE_LABELS[user.primary_role] ?? user.primary_role} · {user.department}</p>
           </div>
-          <button onClick={logout} className="rounded-full p-2 text-ink-500 hover:bg-ink/5 hover:text-ink" aria-label="Sign out"><LogOut className="h-4 w-4" /></button>
+          <SignOutButton className="text-ink-500 hover:bg-ink/5 hover:text-ink" />
         </div>
       </div>
     </div>
@@ -197,12 +201,20 @@ export default function AssistantPage() {
               <div className="space-y-7" aria-live="polite">
                 {detail.loading && messages.length === 0 && <div className="space-y-4"><Skeleton className="ml-auto h-10 w-2/3" /><Skeleton className="h-28 w-5/6" /></div>}
                 {detail.error && messages.length === 0 && <ErrorState message={detail.error.message} onRetry={detail.reload} />}
-                {messages.map((m) => <MessageView key={m.id} message={m} />)}
+                {messages.map((m) => (
+                  <ErrorBoundary key={`${m.id}:${m.status}:${m.updated_at}`} resetKey={m.updated_at} fallback={() => (
+                    <p role="alert" className="rounded-xl border border-hair bg-cream-50 px-4 py-3 text-[13px] text-ink-500" data-testid="message-error">
+                      This message couldn&apos;t be displayed. Reload the page to try again{m.request_id ? ` (request ${m.request_id.slice(0, 12)})` : ""}.
+                    </p>
+                  )}>
+                    <MessageView message={m} />
+                  </ErrorBoundary>
+                ))}
                 {sending && (
                   <div className="flex items-center gap-3 text-[13px] text-ink-500" role="status">
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-forest-50"><ShieldCheck className="h-4 w-4 text-forest" /></span>
                     <span className="flex gap-1">{[0, 1, 2].map((i) => <span key={i} className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-forest" style={{ animationDelay: `${i * 150}ms` }} />)}</span>
-                    {mode === "action" ? "Checking permissions and approval rules…" : "Checking policies…"}
+                    <span>{mode === "action" ? "Checking permissions and approval rules…" : "Checking policies…"}</span>
                   </div>
                 )}
               </div>

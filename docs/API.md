@@ -2,7 +2,8 @@
 
 Base path: `/api`. Interactive OpenAPI docs: **`/api/docs`** (Swagger UI) and `/api/openapi.json`.
 
-- **Auth:** `Authorization: Bearer <access_token>` from `POST /api/auth/login`. Access tokens last 30 minutes; refresh with `POST /api/auth/refresh`.
+- **Auth:** browsers use the HTTP-only session cookies set by `POST /api/auth/login` (writes must send `X-CSRF-Token` = the `trustshield_csrf` cookie). API clients send `Authorization: Bearer <access_token>` from the login response. Access tokens last 30 minutes; refresh with `POST /api/auth/refresh`; `POST /api/auth/logout` revokes the session.
+- **Errors:** `{"error": {"code", "message", "details": [], "request_id"}}` with codes `UNAUTHENTICATED`, `INVALID_CREDENTIALS`, `AUTHORIZATION_DENIED`, `CSRF_FAILED`, `NOT_FOUND`, `CONFLICT`, `VALIDATION_ERROR` (details: `[{field, message}]`), `RATE_LIMITED`, `BAD_REQUEST`, `INTERNAL_ERROR`.
 - **App attribution (optional):** `X-TrustShield-App-Key: tsk_…` attributes a request to a connected app. Revoked or paused apps get `401`.
 - **Request IDs:** every response carries `X-Request-ID`. You can send your own (8–64 ASCII chars).
 - **Errors:** every error has the same shape:
@@ -28,9 +29,9 @@ Codes: `unauthorized` 401, `forbidden` 403, `not_found` 404, `conflict` 409, `va
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | POST | `/auth/login` | `{email, password}` | `{access_token, refresh_token, token_type, expires_in, user}` |
-| POST | `/auth/register` | `{email, password (≥10), full_name, department?}` | 201, same as login. New users get the Employee role. Disabled when `ALLOW_SELF_REGISTRATION=false` |
-| POST | `/auth/refresh` | `{refresh_token}` | new token pair |
-| GET | `/auth/me` | — | user with `role_keys`, `primary_role`, `permissions` |
+| POST | `/auth/refresh` | `{refresh_token}` or the refresh cookie | new access token (cookie + body); the session must be live |
+| POST | `/auth/logout` | — (cookie or bearer) | 204; revokes the session and clears cookies |
+| GET | `/auth/me` | — | user with `organization`, `role_keys`, `primary_role`, `permissions` (all resolved server-side) |
 
 ## Assistant — `assistant:use`
 
@@ -162,7 +163,7 @@ Acting on a resolved case returns `409`.
 | GET | `/admin/audit-events/verify` | audit:read | `{valid, checked, broken_at_event_id}` |
 | GET | `/admin/audit-events/{id}` | audit:read | Event plus per-stage guardrail decisions for its request |
 
-Event types include `assistant.request`, `assistant.provider_error`, `auth.login`, `auth.login_failed`, `auth.registered`, `policy.created|updated|activated|deactivated|archived`, `simulation.run`, `document.uploaded|deleted|reindexed`, `review.approve|edit|reject|escalate|note`, `user.updated`, `role.permissions_updated`, `app.created|updated`, `api_key.created|revoked`, `test_case.created`, `test_run.started|completed`.
+Event types include `assistant.request`, `assistant.provider_error`, `auth.login`, `auth.login_failed`, `auth.logout`, `auth.access_denied`, `policy.created|updated|activated|deactivated|archived`, `simulation.run`, `document.uploaded|deleted|reindexed`, `review.approve|edit|reject|escalate|note`, `user.updated`, `role.permissions_updated`, `app.created|updated`, `api_key.created|revoked`, `test_case.created`, `test_run.started|completed`.
 
 ## Test center — `tests:run`
 

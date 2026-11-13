@@ -37,34 +37,56 @@ PERMISSION_CATALOGUE: dict[str, str] = {
     "data:financial": "Data scope: may receive financial account data",
 }
 
-_ADMIN_EXCLUDED = {"policies:approve", "actions:approve", "actions:finance", "actions:hr", "actions:it"}
+# The admin runs the workspace but never decides on content or money: held answers, policy versions and agent
+# actions are approved by the role accountable for that risk (separation of duties).
+_ADMIN_EXCLUDED = {"reviews:act", "policies:approve", "actions:approve", "actions:finance", "actions:hr", "actions:it"}
 _ADMIN = [p for p in PERMISSION_CATALOGUE if not p.startswith("data:") and p not in _ADMIN_EXCLUDED]
 
+# Every person holds `employee` (use the assistant, request actions) plus at most one job role below.
+# Names here are the canonical display names used everywhere — UI labels, docs and messages follow them.
 DEFAULT_ROLES: list[dict] = [
-    {"key": "employee", "name": "Employee", "description": "Standard employee.",
+    {"key": "employee", "name": "Employee",
+     "description": "Everyone in the organization. Asks the assistant and requests agent actions; approves nothing.",
      "permissions": ["assistant:use", "actions:request"]},
-    {"key": "hr_manager", "name": "HR Manager", "description": "HR leadership with compensation data scope; approves HR actions.",
+    {"key": "hr_manager", "name": "HR Manager",
+     "description": "Sees salary bands (compensation scope). Approves salary changes and sensitive HR look-ups.",
      "permissions": ["assistant:use", "actions:request", "actions:approve", "actions:hr", "data:compensation"]},
-    {"key": "finance_analyst", "name": "Finance Analyst", "description": "Finance team with financial data scope.",
+    {"key": "finance_analyst", "name": "Finance Analyst",
+     "description": "Sees financial account data (financial scope). Requests financial actions; small ones run without approval.",
      "permissions": ["assistant:use", "actions:request", "actions:finance", "data:financial"]},
-    {"key": "finance_head", "name": "Finance Head", "description": "Approves high-value financial actions.",
+    {"key": "finance_head", "name": "Finance Head",
+     "description": "Approves reimbursements above INR 50,000 and vendor refunds above INR 10,000. Reads compliance evidence.",
      "permissions": ["assistant:use", "actions:request", "actions:approve", "actions:finance", "data:financial", "compliance:read"]},
-    {"key": "people_manager", "name": "People Manager", "description": "Line manager; approves mid-value reimbursements and leave changes.",
+    {"key": "people_manager", "name": "People Manager",
+     "description": "Approves reimbursements of INR 5,000–50,000, leave-balance changes and other record updates.",
      "permissions": ["assistant:use", "actions:request", "actions:approve", "actions:hr"]},
     {"key": "compliance_reviewer", "name": "Compliance Reviewer",
-     "description": "Works the review queue, approves policy versions, and owns compliance evidence.",
+     "description": "Decides held answers in the review queue, approves policy versions and exceptions, approves messages "
+                    "to external parties, and owns compliance evidence.",
      "permissions": ["assistant:use", "actions:request", "reviews:read", "reviews:act", "policies:read", "policies:approve",
                      "documents:read", "compliance:read", "compliance:write", "actions:approve"]},
-    {"key": "security_admin", "name": "Security Admin", "description": "Approves access revocations and destructive actions.",
+    {"key": "security_admin", "name": "Security Admin",
+     "description": "Approves access revocations, record deletions and permission changes. Reads the audit log.",
      "permissions": ["assistant:use", "actions:request", "actions:approve", "actions:it", "audit:read", "agents:read", "policies:read"]},
-    {"key": "security_auditor", "name": "Security / Audit Viewer",
-     "description": "Read-only oversight of audit logs, risk analytics, evidence, integrations, and agents.",
+    {"key": "security_auditor", "name": "Security Auditor",
+     "description": "Read-only oversight: audit log and chain verification, dashboards, policies, reviews, evidence, "
+                    "integrations and agents. Approves nothing.",
      "permissions": ["audit:read", "analytics:read", "policies:read", "reviews:read", "documents:read", "settings:read",
                      "compliance:read", "integrations:read", "agents:read"]},
     {"key": "trustshield_admin", "name": "TrustShield Admin",
-     "description": "Owns policies, documents, users, integrations and agents. No data scopes and cannot approve its own changes.",
+     "description": "Runs the workspace: policies, documents, users, apps, integrations and agents. Can view the review "
+                    "queue but not decide it, has no data scopes, and cannot approve its own changes.",
      "permissions": _ADMIN},
 ]
 
 ROLE_ORDER = ["trustshield_admin", "security_admin", "security_auditor", "compliance_reviewer", "finance_head", "hr_manager",
               "people_manager", "finance_analyst", "employee"]
+
+
+def normalize_role_keys(keys: list[str]) -> list[str]:
+    """Everyone is an employee plus at most one job role. Returns ["employee", <job role>?] or raises ValueError."""
+    jobs = list(dict.fromkeys(k for k in keys if k != "employee"))
+    if len(jobs) > 1:
+        raise ValueError("Give each person one job role (plus Employee). Approvals are split by role, so one person "
+                         "holding two job roles would weaken separation of duties.")
+    return ["employee", *jobs]

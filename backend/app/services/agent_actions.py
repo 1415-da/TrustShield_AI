@@ -34,8 +34,9 @@ from app.services.action_executors import EXPENSE_CLAIMS, VENDOR_INVOICES, Actio
 DECISION_ORDER = ["BLOCK", "ESCALATE", "REQUIRE_APPROVAL", "SEND_TO_REVIEW", "EXECUTE"]
 ESCALATION_RISK = 0.9
 OPEN_STATUSES = ("PENDING_APPROVAL", "IN_REVIEW", "ESCALATED", "NEEDS_INFO")
-ROLE_NAMES = {"finance_head": "Finance Head", "people_manager": "your manager", "hr_manager": "an HR Manager",
-              "security_admin": "a Security Admin", "compliance_reviewer": "Compliance"}
+# Employee-facing approver names; they use the canonical role names from app.core.permissions.
+ROLE_NAMES = {"finance_head": "the Finance Head", "people_manager": "a People Manager", "hr_manager": "an HR Manager",
+              "security_admin": "a Security Admin", "compliance_reviewer": "a Compliance Reviewer"}
 ETA = {"finance_head": "Within 1 business day", "people_manager": "Within 1 business day", "hr_manager": "Within 1 business day",
        "security_admin": "Within 4 hours", "compliance_reviewer": "Within 8 hours"}
 CATEGORY_RISK = {"READ": 0.05, "SENSITIVE_READ": 0.45, "CREATE": 0.15, "UPDATE": 0.35, "FINANCIAL_ACTION": 0.5,

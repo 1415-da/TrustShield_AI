@@ -16,8 +16,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import { api, ApiError } from "@/lib/api";
 import { humanize, money, ROLE_LABELS, timeAgo } from "@/lib/format";
+import { ROLES } from "@/lib/roles";
 import type { ActionPolicyItem, AgentActionItem, AgentCatalog } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+/** Roles that approve agent actions (see lib/roles.ts). */
+const APPROVER_ROLES = ROLES.filter((r) => ["people_manager", "finance_head", "hr_manager", "security_admin", "compliance_reviewer"].includes(r.key));
 
 type Tab = "overview" | "approvals" | "activity" | "catalog" | "rules";
 
@@ -223,7 +227,7 @@ export default function AgentControlCenterPage() {
           <div className="grid grid-cols-3 gap-3">
             <Field label="Decision" htmlFor="ar-dec"><Select id="ar-dec" value={form.decision} onChange={(e) => setForm({ ...form, decision: e.target.value })}>{["EXECUTE", "REQUIRE_APPROVAL", "SEND_TO_REVIEW", "ESCALATE", "BLOCK"].map((d) => <option key={d} value={d}>{humanize(d.toLowerCase())}</option>)}</Select></Field>
             <Field label="Approver" htmlFor="ar-role"><Select id="ar-role" value={form.approver_role} disabled={!["REQUIRE_APPROVAL", "SEND_TO_REVIEW", "ESCALATE"].includes(form.decision)} onChange={(e) => setForm({ ...form, approver_role: e.target.value })}>
-              {["finance_head", "people_manager", "hr_manager", "security_admin", "compliance_reviewer"].map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</Select></Field>
+              {APPROVER_ROLES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</Select></Field>
             <Field label="Priority" htmlFor="ar-pri"><Input id="ar-pri" type="number" min={0} max={100} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} /></Field>
           </div>
           {error && <ErrorState message={error} />}

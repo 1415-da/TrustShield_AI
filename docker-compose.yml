@@ -28,6 +28,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-trustshield}:${POSTGRES_PASSWORD:-trustshield}@db:5432/${POSTGRES_DB:-trustshield}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       JWT_SECRET: ${JWT_SECRET:-change-me}
+      # Set to true when the site is served over HTTPS so session cookies are marked Secure.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       SEED_ON_START: "true"
       SLACK_ENABLED: ${SLACK_ENABLED:-false}
@@ -50,6 +52,7 @@ services:
         BACKEND_URL: http://backend:8000
     environment:
       BACKEND_URL: http://backend:8000
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       backend:
         condition: service_healthy

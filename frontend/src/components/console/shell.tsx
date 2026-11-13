@@ -1,67 +1,67 @@
 "use client";
 
 import {
-  BookOpenText, Bot, Rocket, CircleSlash2, Hash, FileCheck2, FlaskConical, Gauge, Inbox, KeyRound, LogOut, Menu, MessagesSquare, PlugZap, ScrollText, Settings2, ShieldCheck,
+  BookOpenText, Bot, Rocket, CircleSlash2, Hash, FileCheck2, FlaskConical, Gauge, Inbox, Menu, MessageSquare, MessagesSquare, PlugZap, ScrollText, Settings2, ShieldCheck,
   SlidersHorizontal, Users, X, type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { NoAccess } from "@/components/auth/no-access";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Logo } from "@/components/brand/logo";
 import { Skeleton } from "@/components/ui/states";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
+import { canAccess, homeFor, OVERVIEW_PERMISSION } from "@/lib/auth/permissions";
+import { hardNavigate } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/format";
 import type { ReviewCase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-interface NavItem { href: string; label: string; Icon: LucideIcon; perm: string | string[] }
-
-const allowed = (can: (p: string) => boolean, perm: string | string[]) => (Array.isArray(perm) ? perm.some(can) : can(perm));
+/** Sidebar entries. Visibility comes from the shared route-access table (lib/auth/permissions.ts). */
+interface NavItem { href: string; label: string; Icon: LucideIcon }
 
 export const NAV: { group: string; items: NavItem[] }[] = [
   { group: "Govern", items: [
-    { href: "/console", label: "Overview", Icon: Gauge, perm: "analytics:read" },
-    { href: "/console/setup", label: "Get started", Icon: Rocket, perm: "users:manage" },
-    { href: "/console/policies", label: "Policy Studio", Icon: ShieldCheck, perm: "policies:read" },
-    { href: "/console/approvals", label: "Policy approvals", Icon: Inbox, perm: "policies:read" },
-    { href: "/console/exceptions", label: "Exceptions", Icon: CircleSlash2, perm: "policies:read" },
-    { href: "/console/simulator", label: "Simulator", Icon: SlidersHorizontal, perm: "policies:read" },
-    { href: "/console/documents", label: "Knowledge sources", Icon: BookOpenText, perm: "documents:read" },
+    { href: "/console", label: "Overview", Icon: Gauge },
+    { href: "/console/setup", label: "Get started", Icon: Rocket },
+    { href: "/console/policies", label: "Policy Studio", Icon: ShieldCheck },
+    { href: "/console/approvals", label: "Policy approvals", Icon: Inbox },
+    { href: "/console/exceptions", label: "Exceptions", Icon: CircleSlash2 },
+    { href: "/console/simulator", label: "Simulator", Icon: SlidersHorizontal },
+    { href: "/console/documents", label: "Knowledge sources", Icon: BookOpenText },
   ] },
   { group: "Operate", items: [
-    { href: "/console/reviews", label: "Review queue", Icon: MessagesSquare, perm: "reviews:read" },
-    { href: "/console/agents", label: "Agent Control Center", Icon: Bot, perm: ["agents:read", "actions:approve"] },
-    { href: "/console/evidence", label: "Evidence Center", Icon: FileCheck2, perm: "compliance:read" },
-    { href: "/console/audit", label: "Audit log", Icon: ScrollText, perm: "audit:read" },
-    { href: "/console/tests", label: "Test center", Icon: FlaskConical, perm: "tests:run" },
+    { href: "/console/reviews", label: "Review queue", Icon: MessagesSquare },
+    { href: "/console/agents", label: "Agent Control Center", Icon: Bot },
+    { href: "/console/evidence", label: "Evidence Center", Icon: FileCheck2 },
+    { href: "/console/audit", label: "Audit log", Icon: ScrollText },
+    { href: "/console/tests", label: "Test center", Icon: FlaskConical },
   ] },
   { group: "Configure", items: [
-    { href: "/console/users", label: "Users & roles", Icon: Users, perm: "users:manage" },
-    { href: "/console/integrations", label: "Slack & workspace", Icon: Hash, perm: "integrations:read" },
-    { href: "/console/apps", label: "Connected apps", Icon: PlugZap, perm: "apps:manage" },
-    { href: "/console/settings", label: "Settings", Icon: Settings2, perm: "settings:read" },
+    { href: "/console/users", label: "Users & roles", Icon: Users },
+    { href: "/console/integrations", label: "Slack & workspace", Icon: Hash },
+    { href: "/console/apps", label: "Connected apps", Icon: PlugZap },
+    { href: "/console/settings", label: "Settings", Icon: Settings2 },
   ] },
 ];
 
-export function firstAllowed(can: (p: string) => boolean): string | null {
-  for (const g of NAV) for (const i of g.items) if (allowed(can, i.perm)) return i.href;
-  return null;
-}
 
 export function ConsoleShell({ children }: { children: ReactNode }) {
-  const { user, loading, logout, can } = useAuth();
-  const router = useRouter();
+  const { user, loading, can } = useAuth();
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const openCases = useApi<ReviewCase[]>(user && can("reviews:read") ? "/reviewer/cases?status=open" : null, 30000);
 
   useEffect(() => {
-    if (!loading && !user) router.replace(`/login?next=${encodeURIComponent(path)}`);
-    else if (!loading && user && !firstAllowed(can)) router.replace("/assistant");
-  }, [loading, user, can, router, path]);
-  useEffect(() => setOpen(false), [path]);
+    // The server layout already redirected signed-out visitors; this covers a session that ends while the page is open.
+    if (!loading && !user) hardNavigate(`/login?next=${encodeURIComponent(path)}`);
+  }, [loading, user, path]);
+  useEffect(() => {
+    setOpen(false);
+  }, [path]);
 
   if (loading || !user) {
     return <div className="flex h-screen items-center justify-center"><Skeleton className="h-10 w-48" /></div>;
@@ -71,7 +71,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
   const nav = (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-5 pb-4 pt-5">
-        <Logo href="/console" />
+        <Logo href={homeFor(user)} />
         <button onClick={() => setOpen(false)} className="rounded-full p-1.5 hover:bg-ink/5 lg:hidden" aria-label="Close navigation"><X className="h-4 w-4" /></button>
       </div>
       {user.organization && (
@@ -82,7 +82,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
       )}
       <nav className="scrollbar-thin flex-1 space-y-6 overflow-y-auto px-3" aria-label="Console">
         {NAV.map((g) => {
-          const items = g.items.filter((i) => allowed(can, i.perm));
+          const items = g.items.filter((i) => (i.href === "/console" ? can(OVERVIEW_PERMISSION) : canAccess(i.href, user.permissions)));
           if (!items.length) return null;
           return (
             <div key={g.group}>
@@ -113,16 +113,19 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
         })}
       </nav>
       <div className="border-t border-hair p-3">
-        <Link href="/docs" className="mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]"><BookOpenText className="h-4 w-4 text-ink-400" />Documentation</Link>
         {can("assistant:use") && (
-          <Link href="/assistant" className="mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]"><KeyRound className="h-4 w-4 text-ink-400" />Open assistant</Link>
+          <>
+            <Link href="/assistant" className="mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]" data-testid="nav-assistant"><MessageSquare className="h-4 w-4 text-ink-400" />Assistant</Link>
+            <Link href="/workspace" className="mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]" data-testid="nav-workspace"><Hash className="h-4 w-4 text-ink-400" />Connected workspace</Link>
+          </>
         )}
+        <Link href="/docs" className="mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] text-ink-700 hover:bg-ink/[0.04]"><BookOpenText className="h-4 w-4 text-ink-400" />Docs</Link>
         <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2">
           <div className="min-w-0">
             <p className="truncate text-[13.5px] font-medium">{user.full_name}</p>
             <p className="truncate text-[11.5px] text-ink-500">{ROLE_LABELS[user.primary_role] ?? user.primary_role}</p>
           </div>
-          <button onClick={logout} className="rounded-full p-2 text-ink-500 hover:bg-ink/5 hover:text-ink" aria-label="Sign out"><LogOut className="h-4 w-4" /></button>
+          <SignOutButton className="text-ink-500 hover:bg-ink/5 hover:text-ink" />
         </div>
       </div>
     </div>
@@ -140,9 +143,11 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
       <div className="min-w-0 flex-1">
         <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-hair bg-cream/90 px-4 backdrop-blur lg:hidden">
           <button onClick={() => setOpen(true)} className="rounded-full p-2 hover:bg-ink/5" aria-label="Open navigation"><Menu className="h-4 w-4" /></button>
-          <Logo href="/console" />
+          <Logo href={homeFor(user)} />
         </div>
-        <main id="main" className="mx-auto max-w-[1240px] px-4 py-8 sm:px-8 lg:py-10">{children}</main>
+        {canAccess(path, user.permissions)
+          ? <main id="main" className="mx-auto max-w-[1240px] px-4 py-8 sm:px-8 lg:py-10">{children}</main>
+          : <NoAccess user={user} />}
       </div>
     </div>
   );

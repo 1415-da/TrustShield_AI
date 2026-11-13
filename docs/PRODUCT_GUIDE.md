@@ -62,19 +62,21 @@ The **NovaCorp** workspace is the live showcase. It is pre-populated with people
 
 ### Roles
 
-| Role | Typical person | What they can do |
-|---|---|---|
-| **Employee** | Anyone | Use the assistant and team channels; request agent actions. |
-| **HR Manager** | Head of HR | Everything an employee can do, plus see **compensation data** and approve HR actions (salary, leave). |
-| **Finance Analyst** | Finance team | Sees **financial data**; can request financial actions. |
-| **Finance Head** | CFO / Head of Finance | Approves high-value reimbursements and refunds; reads compliance evidence. |
-| **People Manager** | Line manager | Approves mid-value reimbursements and leave changes. |
-| **Compliance Reviewer** | Legal / compliance | Works the **review queue**, approves policy versions, generates **compliance evidence**. |
-| **Security Admin** | IT security | Approves access revocations, deletions and admin actions; reads the audit log. |
-| **Security / Audit Viewer** | Internal audit | **Read-only** oversight: audit log, dashboards, policies, reviews, evidence, agents. |
-| **TrustShield Admin** | AI platform owner | Owns policies, documents, users, apps, integrations and agents. Deliberately has **no data scopes** and **cannot approve its own policy changes** (separation of duties). |
+Everyone holds **Employee** plus at most one job role. Each kind of approval belongs to exactly one role.
 
-A person can hold several roles. When someone creates a workspace they become its first TrustShield Admin.
+| Role | Typical person | What they do | Approves |
+|---|---|---|---|
+| **Employee** | Everyone | Use the assistant and team channels; request agent actions. | Nothing |
+| **HR Manager** | Head of HR | Sees **salary bands** in answers (compensation scope). | Salary changes, sensitive HR look-ups |
+| **Finance Analyst** | Finance team | Sees **financial account data**; requests financial actions (small ones run automatically). | Nothing |
+| **People Manager** | Team / line manager | Approves day-to-day changes for their people. | Reimbursements INR 5,000–50,000, leave and record updates |
+| **Finance Head** | CFO / Head of Finance | Approves high-value money movements; reads compliance evidence. | Reimbursements > INR 50,000, vendor refunds > INR 10,000 |
+| **Security Admin** | IT security | Approves risky IT actions; reads the audit log. | Access revocations, record deletions, permission changes |
+| **Compliance Reviewer** | Legal / compliance | Works the **review queue**; generates **compliance evidence**. | Held answers, policy versions, policy exceptions, messages to external parties |
+| **Security Auditor** | Internal audit / InfoSec | **Read-only** oversight: audit log and chain check, dashboards, policies, reviews, evidence, agents. | Nothing |
+| **TrustShield Admin** | AI platform owner | Runs the workspace: policies, documents, users, apps, integrations, agents. **No data scopes.** Can view the review queue but not decide it. | Nothing — not even its own changes (separation of duties) |
+
+When someone creates a workspace they become its first **Employee + TrustShield Admin**. They should add a Compliance Reviewer next — until then, held answers and policy changes have nobody to approve them.
 
 ### NovaCorp accounts (password `TrustShield-demo-2024`)
 
@@ -83,10 +85,12 @@ A person can hold several roles. When someone creates a workspace they become it
 | ananya.rao@novacorp.test | Employee | Assistant |
 | neha.kapoor@novacorp.test | HR Manager | Assistant |
 | rahul.verma@novacorp.test | Finance Analyst | Assistant |
+| aditya.kulkarni@novacorp.test | People Manager | Agent approvals |
 | vivek.raman@novacorp.test | Finance Head | Agent approvals |
+| tara.bose@novacorp.test | Security Admin | Agent approvals |
 | kavya.menon@novacorp.test | Compliance Reviewer | Review queue |
-| rohan.das@novacorp.test | TrustShield Admin | Console |
-| sanjay.gupta@novacorp.test | Security / Audit | Audit log |
+| sanjay.gupta@novacorp.test | Security Auditor | Audit log |
+| rohan.das@novacorp.test | TrustShield Admin | Console overview |
 
 ---
 
@@ -110,7 +114,7 @@ The marketing site.
   - the final answer exactly as the employee would see it.
 
   It runs against NovaCorp's real policies. Prompts are not stored (only a hash goes to the audit log), and it is rate-limited.
-- **Sign in as a persona**: one-click buttons to enter the NovaCorp workspace as each role above.
+- **Sign in as a persona**: one card per role. A card opens the sign-in page with that account filled in; you press **Sign in** yourself.
 
 ### Sign up `/signup`
 Form fields: organization name, your name, work email, password, industry, size. Submitting creates a new isolated workspace that starts with:
@@ -251,7 +255,7 @@ The policy documents the assistant answers from.
 ### OPERATE
 
 #### Review queue `/console/reviews`
-*Who: Compliance Reviewers (act), auditors (read).*
+*Who: Compliance Reviewers decide; the TrustShield Admin and Security Auditor can view.*
 Answers TrustShield would not deliver on its own, sorted by **priority and nearest SLA**. SLAs: Critical 1h, High 4h, Medium 8h, Low 24h. Filters: status, priority, origin (assistant / Slack / workspace).
 
 **Case detail** (`/reviews/[id]`):
@@ -292,7 +296,7 @@ Agents never hold standing permission to act. Every requested action is classifi
   - buttons: Approve, Reject, Request info, Escalate, Execute, and **Compensate** (reverse an executed action).
 
 #### Agent approvals (the *My approvals* tab)
-Approvers (Finance Head, HR Manager, People Manager, Security Admin) see the actions routed to **their** role and approve or reject them. Nobody can approve their own request.
+Approvers (People Manager, Finance Head, HR Manager, Security Admin, and Compliance Reviewer for external messages) see the actions routed to **their** role and approve or reject them. Nobody can approve their own request.
 
 #### Evidence Center `/console/evidence`
 *Who: Compliance (generate), Finance Head and auditors (read).*

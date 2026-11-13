@@ -274,7 +274,7 @@ export function GetStarted() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
             <Link href="/signup" className={cn(buttonVariants({ variant: "lilac", size: "lg" }), "group")}>
-              Create your workspace <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+              Create workspace <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
             </Link>
             <Link href="/demo" className={cn(buttonVariants({ variant: "secondary", size: "lg" }), "border-cream/25 bg-transparent text-cream hover:bg-cream/10")}>Explore the live demo</Link>
           </div>

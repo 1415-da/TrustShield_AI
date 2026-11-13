@@ -26,7 +26,7 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_token(subject: str, token_type: TokenType, extra: dict[str, Any] | None = None) -> str:
+def create_token(subject: str, token_type: TokenType, extra: dict[str, Any] | None = None, *, sid: str = "") -> str:
     settings = get_settings()
     now = datetime.now(timezone.utc)
     lifetime = (
@@ -37,6 +37,9 @@ def create_token(subject: str, token_type: TokenType, extra: dict[str, Any] | No
     payload: dict[str, Any] = {
         "sub": subject,
         "type": token_type,
+        "sid": sid,
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
         "iat": int(now.timestamp()),
         "exp": int((now + lifetime).timestamp()),
         "jti": secrets.token_hex(8),
@@ -47,8 +50,13 @@ def create_token(subject: str, token_type: TokenType, extra: dict[str, Any] | No
 
 
 def decode_token(token: str, expected_type: TokenType) -> dict[str, Any]:
+    """Verify signature, expiry, issuer, audience and token type. Raises `jwt.PyJWTError` on any failure."""
     settings = get_settings()
-    payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    payload = jwt.decode(
+        token, settings.jwt_secret, algorithms=[settings.jwt_algorithm],
+        audience=settings.jwt_audience, issuer=settings.jwt_issuer,
+        options={"require": ["exp", "iat", "sub", "iss", "aud", "type", "sid", "jti"]},
+    )
     if payload.get("type") != expected_type:
         raise jwt.InvalidTokenError("wrong token type")
     return payload

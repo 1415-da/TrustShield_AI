@@ -56,7 +56,7 @@ export default function IntegrationsPage() {
     <>
       <PageHeader eyebrow="Integrations" title="Slack & connected workspace"
         description="Team channels answered by TrustShield with the same guardrails, review workflow and audit trail as the web assistant."
-        actions={<><Link href="/workspace" className="inline-flex h-10 items-center rounded-full border border-ink/15 px-5 text-sm hover:bg-white">Open workspace</Link>
+        actions={<><Link href="/workspace" className="inline-flex h-10 items-center rounded-full border border-ink/15 px-5 text-sm hover:bg-white">Connected workspace</Link>
           {manage && <Button onClick={() => void test()} loading={testing}><PlugZap className="h-4 w-4" />Test connection</Button>}</>} />
       {status.error && <ErrorState message={status.error.message} onRetry={status.reload} />}
       <div className="mb-6 grid gap-6 lg:grid-cols-2">

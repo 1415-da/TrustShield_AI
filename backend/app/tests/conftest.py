@@ -79,9 +79,18 @@ def client() -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _fresh_cookies(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Tests authenticate explicitly with bearer headers; never let a previous test's session cookies leak in."""
+    if "client" in request.fixturenames:
+        request.getfixturevalue("client").cookies.clear()
+    yield
+
+
 def login(client: TestClient, email: str) -> dict[str, str]:
     r = client.post("/api/auth/login", json={"email": email, "password": PASSWORD})
     assert r.status_code == 200, r.text
+    client.cookies.clear()  # use the bearer token only, so tests stay independent of the cookie jar
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 

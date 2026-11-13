@@ -6,12 +6,12 @@ export interface DocEntry {
 }
 
 export const DOCS: DocEntry[] = [
-  { slug: "quickstart", group: "Getting started", title: "Quickstart", summary: "Create a workspace, upload policies, invite a reviewer and send your first governed request." },
+  { slug: "quickstart", group: "Getting started", title: "Quickstart", summary: "Create a workspace, upload policies, add a Compliance Reviewer and send your first governed request." },
   { slug: "concepts", group: "Getting started", title: "How the gateway decides", summary: "The pipeline, the five input decisions, the five output decisions and trust statuses." },
   { slug: "workspaces", group: "Getting started", title: "Workspaces & people", summary: "Organization isolation, inviting colleagues, and who should hold which role." },
 
   { slug: "policies", group: "Govern", title: "Policies & approvals", summary: "Rule types, versioning, two-person approval, simulation, rollback and exceptions." },
-  { slug: "knowledge", group: "Govern", title: "Knowledge sources", summary: "Upload the documents answers are grounded in and cite; trusted vs untrusted sources." },
+  { slug: "knowledge", group: "Govern", title: "Connecting knowledge sources", summary: "Upload the documents answers are grounded in and cite; trusted vs untrusted sources." },
   { slug: "review", group: "Govern", title: "Human review", summary: "What gets held, how reviewers decide, SLAs and how the employee is updated." },
   { slug: "agent-actions", group: "Govern", title: "Agent actions", summary: "Approval rules for actions agents take: thresholds, approver roles, execution and compensation." },
   { slug: "evidence", group: "Govern", title: "Compliance evidence", summary: "Immutable, reproducible reports for auditors, with schedules and exports." },

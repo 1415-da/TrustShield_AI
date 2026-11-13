@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import { Logo } from "@/components/brand/logo";
 import { buttonVariants } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
+import { homeFor, useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -29,7 +29,9 @@ export function LandingNav() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-  useEffect(() => setOpen(false), [path]);
+  useEffect(() => {
+    setOpen(false);
+  }, [path]);
 
   const active = (href: string) => !href.includes("#") && path.startsWith(href);
   return (
@@ -45,7 +47,7 @@ export function LandingNav() {
         </div>
         <div className="flex items-center gap-2">
           {user ? (
-            <Link href="/console" className={buttonVariants({ size: "sm" })}>Open workspace</Link>
+            <Link href={homeFor(user)} className={buttonVariants({ size: "sm" })} data-testid="open-app">Open app</Link>
           ) : (
             <>
               <Link href="/login" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden sm:inline-flex")}>Sign in</Link>

@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import threading
 import time
-from collections import defaultdict, deque
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.errors import AppError
+from app.core.ratelimit import client_key, limiter as shared_limiter
 from app.core.deps import get_current_user, require_permission
 from app.core.security import sha256_hex
 from app.core.tenancy import current_org, use_org
@@ -55,48 +55,24 @@ class PlaygroundRequest(BaseModel):
     role: str = Field(default="employee", pattern=r"^(employee|hr_manager|finance_analyst)$")
 
 
-class _IpLimiter:
-    def __init__(self) -> None:
-        self.hits: dict[str, deque[float]] = defaultdict(deque)
-        self.lock = threading.Lock()
-
-    def allow(self, key: str, limit: int, window: float) -> bool:
-        now = time.monotonic()
-        with self.lock:
-            q = self.hits[key]
-            while q and now - q[0] > window:
-                q.popleft()
-            if len(q) >= limit:
-                return False
-            q.append(now)
-            return True
-
-    def reset(self) -> None:
-        with self.lock:
-            self.hits.clear()
-
-
-limiter = _IpLimiter()
-
-
-def _client(request: Request) -> str:
-    # Behind the web app's /api proxy every request comes from the proxy, so prefer the forwarded client address.
-    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    return forwarded or (request.client.host if request.client else "unknown")
+limiter = shared_limiter  # re-exported for tests
+_client = client_key
 
 
 # --------------------------------------------------------------------------- workspaces
 @router.post("/orgs/signup", response_model=LoginResponse, status_code=201)
-def signup(body: SignupRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+def signup(body: SignupRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
     """Create an organization workspace and its first admin, then sign them in."""
     if not limiter.allow(f"signup:{_client(request)}", limit=20, window=3600):
-        raise HTTPException(status_code=429, detail="Too many workspaces created from this network. Try again later.")
-    from app.api.auth import _tokens
+        raise AppError(429, "RATE_LIMITED", "Too many workspaces created from this network. Please try again later.")
+    from app.api.auth import sign_in
 
     _org, admin = organizations.create_organization(
         db, name=body.organization_name, full_name=body.full_name, email=body.email, password=body.password,
         industry=body.industry, size=body.size)
-    return {**_tokens(admin), "user": UserOut.of(admin)}
+    result = sign_in(db, admin, request, response)
+    db.commit()
+    return result
 
 
 @router.get("/orgs/current")

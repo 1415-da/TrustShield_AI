@@ -13,7 +13,7 @@ from app.models import AuditEvent, PolicyAuditEvent, PolicyVersion
 from app.models.policy import ImmutableVersionError
 from app.services import gateway
 
-from .conftest import actor
+from .conftest import PASSWORD, actor, login
 
 _n = itertools.count()
 
@@ -175,11 +175,24 @@ def test_every_transition_is_audited(client, headers, db):
         assert ev is not None and ev.event_type == f"policy.{h['event_type']}" and p["id"] in ev.policy_ids
 
 
-def test_separation_of_duties(client, headers):
+def test_separation_of_duties(client, headers, db):
     p = create(client, headers)
     client.post(f"/api/admin/policies/{p['id']}/submit-for-review", json={}, headers=headers["admin"])
-    # Rohan holds both admin and compliance roles but authored this version.
+    # The TrustShield Admin authors policies but never approves them.
     r = client.post(f"/api/admin/policies/{p['id']}/approve", json={}, headers=headers["admin"])
+    assert r.status_code == 403 and r.json()["error"]["code"] == "AUTHORIZATION_DENIED"
+
+    # Even someone holding both roles cannot approve a version they authored themselves.
+    from app.core.security import hash_password
+    from app.models import Role, User
+    roles = {r.key: r for r in db.scalars(select(Role))}
+    db.add(User(email="dual.role@novacorp.test", full_name="Dual Role", department="IT", title="Test",
+                password_hash=hash_password(PASSWORD), roles=[roles["employee"], roles["trustshield_admin"], roles["compliance_reviewer"]]))
+    db.commit()
+    dual = login(client, "dual.role@novacorp.test")
+    p2 = create(client, {"admin": dual})
+    client.post(f"/api/admin/policies/{p2['id']}/submit-for-review", json={}, headers=dual)
+    r = client.post(f"/api/admin/policies/{p2['id']}/approve", json={}, headers=dual)
     assert r.status_code == 403 and "Separation of duties" in r.json()["error"]["message"]
 
 

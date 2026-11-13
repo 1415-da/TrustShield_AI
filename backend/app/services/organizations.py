@@ -19,15 +19,16 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.errors import Conflict
+from app.core.errors import BadRequest, Conflict
+from app.core.permissions import normalize_role_keys
 from app.core.security import hash_password
 from app.core.tenancy import ALL_ORGS, use_org
 from app.models import (ApiKey, AuditEvent, ConnectedApp, Document, Organization, Policy, PolicyProfile, Role, TestCase, User,
                         WorkspaceChannel)
 from app.services import audit, policies
 
-# The founder is the workspace admin: policies, apps, users. They invite reviewers and approvers.
-FOUNDER_ROLES = ("trustshield_admin",)
+# The founder is an employee and the workspace admin: policies, apps, users. They invite reviewers and approvers.
+FOUNDER_ROLES = ("employee", "trustshield_admin")
 
 FIRST_PARTY_APP = {"name": "Web Assistant", "slug": "web-assistant", "owner_team": "IT",
                    "description": "Your employees' assistant, served by TrustShield."}
@@ -126,10 +127,15 @@ def invite_user(db: Session, inviter: User, *, email: str, full_name: str, role_
     email = email.strip().lower()
     if db.scalar(select(User.id).where(func.lower(User.email) == email).execution_options(**ALL_ORGS)):
         raise Conflict("An account with this email already exists")
-    roles = list(db.scalars(select(Role).where(Role.key.in_(role_keys))))
-    if not roles:
-        roles = list(db.scalars(select(Role).where(Role.key == "employee")))
-    user = User(email=email, full_name=full_name.strip(), department=department, title=title or roles[0].name,
+    # Everyone is an employee plus at most one job role.
+    try:
+        keys = normalize_role_keys(role_keys)
+    except ValueError as e:
+        raise BadRequest(str(e)) from e
+    found = {r.key: r for r in db.scalars(select(Role).where(Role.key.in_(keys)))}
+    roles = [found[k] for k in keys if k in found]
+    job = next((r for r in roles if r.key != "employee"), roles[0])
+    user = User(email=email, full_name=full_name.strip(), department=department, title=title or job.name,
                 password_hash=hash_password(password), roles=roles)
     db.add(user)
     db.flush()
@@ -147,14 +153,15 @@ def summary(db: Session, org: Organization) -> dict[str, Any]:
     keys = count(ApiKey, ApiKey.revoked_at.is_(None))
     active_policies = count(Policy, Policy.active_version_id.is_not(None))
     requests = count(AuditEvent, AuditEvent.event_type.like("%.request"))
-    reviewers = db.scalar(select(func.count(User.id)).where(User.roles.any(Role.key.in_(("compliance_reviewer", "trustshield_admin")))))
+    reviewers = db.scalar(select(func.count(User.id)).where(User.roles.any(Role.key == "compliance_reviewer")))
     steps = [
         {"key": "policies", "title": "Baseline policies are active", "done": active_policies > 0,
          "detail": f"{active_policies} policies enforcing", "href": "/console/policies"},
         {"key": "documents", "title": "Upload your policy documents", "done": documents > 0,
          "detail": "Answers are grounded in and cite these sources", "href": "/console/documents"},
-        {"key": "team", "title": "Invite a reviewer and your team", "done": users > 1,
-         "detail": "Policy changes need a second approver", "href": "/console/users"},
+        {"key": "team", "title": "Add a Compliance Reviewer", "done": reviewers > 0,
+         "detail": "They decide held answers and approve policy changes — the admin can't approve its own",
+         "href": "/console/users"},
         {"key": "first_request", "title": "Ask your first governed question", "done": requests > 0,
          "detail": "Try it in the assistant or a team channel", "href": "/assistant"},
         {"key": "api_key", "title": "Connect an app with an API key", "done": keys > 0,

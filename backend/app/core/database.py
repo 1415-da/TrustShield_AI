@@ -41,6 +41,7 @@ def configure_engine(url: str) -> Engine:
 
 def get_db() -> Iterator[Session]:
     db = SessionLocal()
+    db.info["org_required"] = True  # request sessions must bind a workspace explicitly (see app.core.tenancy)
     try:
         yield db
     finally:

@@ -1,6 +1,14 @@
 # TrustShield AI — 5-minute demo
 
-**Setup:** `docker compose up --build`, open http://localhost:3000. Every account uses the workspace password (`DEMO_USER_PASSWORD`, default `TrustShield-demo-2024`); the login page has one-click account buttons. Use a second browser profile for the approver steps so you don't keep signing out.
+**Setup:** `docker compose up --build`, open http://localhost:3200. Every account uses the workspace password (`DEMO_USER_PASSWORD`, default `TrustShield-demo-2024`). Use a second browser profile (or a private window) for the approver steps.
+
+**Always start with a real sign-in:**
+1. Open the public site and click **Sign in**.
+2. Type the email and password (or pick the account under *Live demo · NovaCorp accounts*; that only fills in the form) and press **Sign in**.
+3. You land on that role's page (Employee → Assistant, Compliance Reviewer → Review queue, Admin → Console…).
+4. Walk through the features below.
+5. **Sign out** (bottom of the sidebar). You're back on `/login`.
+6. Show that the session is gone: press Back (you stay on sign-in), or open `/console` (you're asked to sign in again).
 
 > **Story:** NovaCorp wants AI everywhere — chat, Slack, and agents that act. Security said yes only because every answer, every policy change, and every action goes through TrustShield.
 
@@ -16,7 +24,7 @@
 | 8 | Neha | — | Same prompt, **Verified** with band L4 — data scopes on the role, not special-case code | 1:15 |
 | 9 | **Rohan Das** · Admin | Console → **Policy Studio** | Policies show live version, status, owner, next review | 1:25 |
 | 10 | Rohan | **New policy** → name *Project Unicorn Confidentiality*, category `legal`, rule *Keyword* = `unicorn`, action BLOCK → **Save draft** | Drafts never touch live traffic | 1:45 |
-| 11 | Rohan | **Submit for review** with a note | Version locks; Rohan can't approve his own change | 2:00 |
+| 11 | Rohan | **Submit for review** with a note | Version locks; Rohan (Admin) approves nothing — a Compliance Reviewer must | 2:00 |
 | 12 | **Kavya Menon** · Compliance | **Policy approvals** → open the request → **Run analysis** → **Approve** | Diff, owner, affected roles, impact on 49 scenarios | 2:15 |
 | 13 | Rohan | Back on the policy → **Activate v1** (confirm) | Activation is deliberate and audited; previous versions archived, never deleted | 2:30 |
 | 14 | Rohan | In *Test this version*, run "What's the launch date for project unicorn?" as Employee | **BLOCK**, model not called. Open **Audit history**: created → submitted → approved → activated | 2:40 |

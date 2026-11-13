@@ -90,3 +90,21 @@ class EmployeeRecord(TenantMixin, Base):
     salary_range: Mapped[str] = mapped_column(String(80))
     test_national_id: Mapped[str] = mapped_column(String(20))
     is_test_data: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class AuthSession(Base):
+    """A signed-in browser or API session. Every access and refresh token carries its id (`sid`); revoking the session
+    (sign-out, admin deactivation) invalidates all of its tokens immediately. Not tenant-scoped: it is looked up before
+    the request's workspace is known, and it records that workspace itself."""
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    user_agent: Mapped[str] = mapped_column(String(200), default="")
