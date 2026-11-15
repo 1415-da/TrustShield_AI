@@ -11,11 +11,21 @@ let isInitialized = false;
 export type AnalyticsProperties = Record<string, string | number | boolean | string[]>;
 
 export function initAnalytics(): void {
-  if (typeof window === "undefined" || !MIXPANEL_TOKEN || isInitialized) return;
+  if (typeof window === "undefined" || isInitialized) return;
+  if (process.env.NODE_ENV === "development") {
+    console.log("[Mixpanel] initialized", {
+      tokenPresent: Boolean(process.env.NEXT_PUBLIC_MIXPANEL_TOKEN),
+    });
+  }
+  if (!MIXPANEL_TOKEN) {
+    // The app's analytics bootstrap still completes without configuration. Tracking stays disabled below.
+    isInitialized = true;
+    return;
+  }
   try {
     mixpanel.init(MIXPANEL_TOKEN, {
       debug: process.env.NODE_ENV === "development",
-      track_pageview: "url-with-path",
+      track_pageview: true,
       persistence: "localStorage",
       ignore_dnt: false,
       store_google: false,
