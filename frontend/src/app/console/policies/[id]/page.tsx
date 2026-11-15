@@ -24,6 +24,7 @@ import { api, ApiError } from "@/lib/api";
 import { dateTime, humanize, shortDate } from "@/lib/format";
 import type { Catalogue, PolicyAuditItem, PolicyComment, PolicyDefinition, PolicyDetail, VersionDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { POLICY_EVENTS, useAnalytics } from "@/lib/analytics";
 
 type Tab = "live" | "draft" | "history" | "comments";
 const EDITABLE = ["DRAFT", "CHANGES_REQUESTED", "REJECTED"];
@@ -31,6 +32,7 @@ const EDITABLE = ["DRAFT", "CHANGES_REQUESTED", "REJECTED"];
 export default function PolicyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { can } = useAuth();
+  const analytics = useAnalytics();
   const toast = useToast();
   const writable = can("policies:write");
   const policy = useApi<PolicyDetail>(`/admin/policies/${id}`);
@@ -66,6 +68,16 @@ export default function PolicyDetailPage() {
     setError(null);
     try {
       await api(`/admin/policies/${id}/${path}`, { method: "POST", body });
+      const eventByPath: Record<string, (typeof POLICY_EVENTS)[keyof typeof POLICY_EVENTS] | undefined> = {
+        submit: POLICY_EVENTS.POLICY_SUBMITTED_FOR_APPROVAL,
+        approve: POLICY_EVENTS.POLICY_APPROVED,
+        reject: POLICY_EVENTS.POLICY_REJECTED,
+        activate: POLICY_EVENTS.POLICY_ACTIVATED,
+        deactivate: POLICY_EVENTS.POLICY_DEACTIVATED,
+        rollback: POLICY_EVENTS.POLICY_ROLLED_BACK,
+      };
+      const event = eventByPath[path];
+      if (event) analytics.track(event, { surface: "policy_studio", feature_area: "policy", success: true });
       toast({ tone: "success", title: success });
       await refresh();
     } catch (e) {

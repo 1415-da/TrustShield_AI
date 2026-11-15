@@ -20,6 +20,7 @@ from app.schemas.policy import (
     PolicyDetail, PolicyDraftUpdate, PolicyOut, RollbackRequest, SimulateRequest, VersionOut,
 )
 from app.services import audit, policies, simulation
+from app.services.analytics_events import analytics_metadata
 
 router = APIRouter(prefix="/admin", tags=["policies"])
 can_read = require_permission("policies:read")
@@ -99,6 +100,16 @@ def simulate_any(body: SimulateRequest, user: User = Depends(can_read), db: Sess
     focus = simulation.draft_snapshot(body.draft_policy.model_dump(mode="json")) if body.draft_policy else None
     result = simulation.simulate(db, prompt=body.prompt, role=body.role, include_output=body.include_output, focus=focus,
                                  profile=body.profile)
+    final = result["final"]
+    result["analytics"] = analytics_metadata(
+        workspace_id=user.organization_id, user_role=user.primary_role, simulation_role=body.role,
+        surface="policy_studio", input_action=final["input_action"], trust_status=final["trust_status"],
+        input_risk_score=(result.get("input") or {}).get("risk_score"),
+        output_risk_score=(result.get("output") or {}).get("risk_score"),
+        confidence=(final.get("explanation") or {}).get("confidence"),
+        citation_count=len(final.get("citations") or []), model_called=final["llm_called"],
+        matches=[match for stage in (result.get("input"), result.get("context"), result.get("output")) if stage for match in stage.get("matches", [])],
+    )
     audit.record(db, "simulation.run", **audit.actor_fields(user), commit=True,
                  details={"role": body.role, "input_action": result["final"]["input_action"], "draft_policy": bool(focus)})
     return result
@@ -118,7 +129,7 @@ def save_draft_compat(policy_id: int, body: PolicyDraftUpdate, user: User = Depe
     return policies.save_draft(db, policies.get_policy(db, policy_id), data, user, summary)
 
 
-@router.delete("/policies/{policy_id}", status_code=204)
+@router.delete("/policies/{policy_id}", status_code=204, response_model=None)
 def archive_policy(policy_id: int, user: User = Depends(can_write), db: Session = Depends(get_db)) -> None:
     policies.archive_policy(db, policies.get_policy(db, policy_id), user)
 
@@ -212,6 +223,16 @@ def simulate_policy(policy_id: int, body: SimulateRequest, user: User = Depends(
             raise BadRequest("Enter a prompt to simulate")
         result = simulation.simulate(db, prompt=body.prompt, role=body.role, include_output=body.include_output,
                                      focus=focus, profile=body.profile)
+        final = result["final"]
+        result["analytics"] = analytics_metadata(
+            workspace_id=user.organization_id, user_role=user.primary_role, simulation_role=body.role,
+            surface="policy_studio", input_action=final["input_action"], trust_status=final["trust_status"],
+            input_risk_score=(result.get("input") or {}).get("risk_score"),
+            output_risk_score=(result.get("output") or {}).get("risk_score"),
+            confidence=(final.get("explanation") or {}).get("confidence"),
+            citation_count=len(final.get("citations") or []), model_called=final["llm_called"],
+            matches=[match for stage in (result.get("input"), result.get("context"), result.get("output")) if stage for match in stage.get("matches", [])],
+        )
     audit.record(db, "simulation.run", **audit.actor_fields(user), policy_ids=[p.id], commit=True,
                  details={"version": v.version, "status": v.status, "suite": body.suite, "role": body.role})
     return result

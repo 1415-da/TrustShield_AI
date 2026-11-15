@@ -3,7 +3,7 @@
 import { ArrowLeft, Check, Pencil, ShieldAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { RichText } from "@/components/assistant/message";
 import { Section } from "@/components/console/shell";
@@ -18,12 +18,14 @@ import { useApi } from "@/hooks/useApi";
 import { api, ApiError } from "@/lib/api";
 import { dateTime, humanize, ROLE_LABELS } from "@/lib/format";
 import type { ReviewCaseDetail } from "@/lib/types";
+import { REVIEW_EVENTS, useAnalytics } from "@/lib/analytics";
 
 type Decision = "approve" | "edit" | "reject" | "escalate";
 
 export default function ReviewCasePage() {
   const { id } = useParams<{ id: string }>();
   const { can } = useAuth();
+  const analytics = useAnalytics();
   const canAct = can("reviews:act");
   const { data: c, error, loading, setData, reload } = useApi<ReviewCaseDetail>(`/reviewer/cases/${id}`);
   const [note, setNote] = useState("");
@@ -31,7 +33,16 @@ export default function ReviewCasePage() {
   const [edited, setEdited] = useState("");
   const [busy, setBusy] = useState<Decision | "note" | null>(null);
   const [actionError, setActionError] = useState<ApiError | null>(null);
+  const openedCase = useRef<string | null>(null);
   useEffect(() => { if (c) setEdited(c.draft_response ?? ""); }, [c?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (c && openedCase.current !== id) {
+      openedCase.current = id;
+      analytics.track(REVIEW_EVENTS.REVIEW_CASE_OPENED, {
+        surface: "reviewer_console", feature_area: "review", priority: c.priority, origin: c.origin,
+      });
+    }
+  }, [analytics, c, id]);
 
   const act = async (decision: Decision | "note") => {
     setBusy(decision);
@@ -40,6 +51,10 @@ export default function ReviewCasePage() {
       const path = decision === "note" ? "notes" : decision;
       const body = decision === "edit" ? { note, edited_response: edited } : { note };
       const updated = await api<ReviewCaseDetail>(`/reviewer/cases/${id}/${path}`, { method: "POST", body });
+      if (decision !== "note") analytics.track(REVIEW_EVENTS.REVIEW_CASE_DECIDED, {
+        surface: "reviewer_console", feature_area: "review", priority: c?.priority,
+        origin: c?.origin, review_decision: decision,
+      });
       setData(updated);
       setNote("");
       setEditing(false);

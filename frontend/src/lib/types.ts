@@ -3,6 +3,22 @@ export type OutputAction = "SHOW" | "SHOW_WITH_WARNING" | "REDACT" | "SEND_TO_RE
 export type TrustStatus = "verified" | "needs_review" | "redacted" | "blocked";
 export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
+export interface AnalyticsMetadata {
+  workspace_id?: string;
+  user_role?: string;
+  simulation_role?: string;
+  surface?: string;
+  decision?: "allow" | "redact" | "review" | "block" | "escalate";
+  policy_categories?: string[];
+  input_risk_tier?: string;
+  output_risk_tier?: string;
+  confidence_bucket?: string;
+  citation_count?: number;
+  response_time_bucket?: string;
+  model_called?: boolean;
+  trust_status?: string;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -71,6 +87,7 @@ export interface PlaygroundResult {
   citations: { title: string; heading: string; snippet: string }[];
   stages: PlaygroundStage[];
   latency_ms: number;
+  analytics?: AnalyticsMetadata;
 }
 
 export interface PublicStats {
@@ -155,6 +172,7 @@ export interface ChatResponse {
     review_case_id: number | null;
     latency_ms: number;
   };
+  analytics: AnalyticsMetadata;
 }
 
 export interface Rule {
@@ -359,6 +377,7 @@ export interface SimulationResult {
     citations: Citation[];
   };
   focus_policy: { id: number; name: string; version?: number; triggered: boolean; matches: RuleMatch[] } | null;
+  analytics?: AnalyticsMetadata;
 }
 
 export interface DocumentItem {
@@ -650,6 +669,7 @@ export interface WorkspaceReply {
 export interface WorkspaceItem {
   event_id: string; id: number; source: "workspace" | "slack"; created_at: string; is_mine: boolean;
   author: { name: string; department: string }; text: string | null; withheld: boolean; reply: WorkspaceReply;
+  analytics?: AnalyticsMetadata;
 }
 
 export interface IntegrationStatus {

@@ -20,12 +20,15 @@ import { api, ApiError } from "@/lib/api";
 import { dateTime, shortDate, timeAgo } from "@/lib/format";
 import type { ComplianceReport, ReportOptions, ReportSchedule, ReportType } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAnalytics } from "@/lib/analytics";
+import { GOVERNANCE_EVENTS } from "@/lib/analytics/events";
 
 type Tab = "library" | "builder" | "schedules";
 const PRESETS = [[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last quarter"]] as const;
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 export default function EvidenceCenterPage() {
+  const analytics = useAnalytics();
   const confirm = useConfirm();
   const { can } = useAuth();
   const writable = can("compliance:write");
@@ -60,6 +63,12 @@ export default function EvidenceCenterPage() {
       const r = await api<ComplianceReport>("/compliance/reports", { method: "POST", body: {
         report_type: type, ...period, departments, policy_ids: policyIds.map(Number), risk_levels: risk, reviewers, ...incl,
         retention_days: retention ? Number(retention) : null } });
+      const days = preset === "custom" ? null : preset;
+      analytics.track(GOVERNANCE_EVENTS.EVIDENCE_REPORT_GENERATED, {
+        report_type: type,
+        report_period: days === 7 ? "last_7_days" : days === 30 ? "last_30_days" : days === 90 ? "last_90_days" : "custom",
+        record_count_bucket: r.source_record_count === 0 ? "zero" : r.source_record_count <= 10 ? "1_10" : r.source_record_count <= 50 ? "11_50" : r.source_record_count <= 100 ? "51_100" : "101_plus",
+      });
       toast({ tone: "success", title: "Report generated", body: "Stored as an immutable evidence record." });
       router.push(`/console/evidence/${r.id}`);
     } catch (e) {

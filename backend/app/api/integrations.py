@@ -16,6 +16,7 @@ from app.core.errors import BadRequest, NotFound
 from app.models import PolicyProfile, SlackEvent, User, WorkspaceChannel
 from app.models.base import utcnow
 from app.services import audit, workspace
+from app.services.analytics_events import analytics_metadata
 from app.services.slack_bolt_app import handler
 
 router = APIRouter(tags=["integrations"])
@@ -159,4 +160,13 @@ def post_message(channel_id: int, body: WorkspaceMessage, user: User = Depends(c
     c = workspace.get_channel(db, channel_id)
     key = f"ws:{user.id}:{body.client_msg_id}" if body.client_msg_id else f"ws:{uuid.uuid4().hex}"
     ev, _created = workspace.handle_message(db, workspace.Inbound(event_id=key, source="workspace", channel=c, user=user, text=body.text))
-    return next(item for item in workspace.feed(db, c, user, limit=200) if item["event_id"] == ev.event_id)
+    item = next(item for item in workspace.feed(db, c, user, limit=200) if item["event_id"] == ev.event_id)
+    reply = item.get("reply", {})
+    return {
+        **item,
+        "analytics": analytics_metadata(
+            workspace_id=user.organization_id, user_role=user.primary_role, surface="connected_workspace",
+            input_action=ev.input_action, trust_status=reply.get("trust_status"),
+            citation_count=len(reply.get("citations") or []),
+        ),
+    }

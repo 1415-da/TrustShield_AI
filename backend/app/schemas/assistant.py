@@ -42,6 +42,7 @@ class ChatResponse(BaseModel):
     user_message: MessageOut
     message: MessageOut
     decision: DecisionOut
+    analytics: dict[str, Any] = Field(default_factory=dict)
 
 
 class ConversationSummary(ORMModel):

@@ -19,10 +19,13 @@ import { useApi } from "@/hooks/useApi";
 import { api, ApiError, download } from "@/lib/api";
 import { dateTime, shortDate } from "@/lib/format";
 import type { AuditEvent, ComplianceReport, VerifyResult } from "@/lib/types";
+import { useAnalytics } from "@/lib/analytics";
+import { GOVERNANCE_EVENTS } from "@/lib/analytics/events";
 
 interface SourcesPage { total: number; page: number; page_size: number; items: AuditEvent[] }
 
 export default function ReportDetailPage() {
+  const analytics = useAnalytics();
   const { id } = useParams<{ id: string }>();
   const { can } = useAuth();
   const router = useRouter();
@@ -47,6 +50,7 @@ export default function ReportDetailPage() {
   const doExport = async (format: "markdown" | "json" | "html") => {
     try {
       await download(`/compliance/reports/${r.id}/export?format=${format}`, `report-${r.id}.${format === "markdown" ? "md" : format}`);
+      analytics.track(GOVERNANCE_EVENTS.EVIDENCE_REPORT_EXPORTED, { export_format: format === "markdown" ? "markdown" : format });
       toast({ tone: "success", title: "Export ready", body: format === "json" ? "Evidence package downloaded." : `${format.toUpperCase()} report downloaded.` });
     } catch (e) {
       toast({ tone: "error", title: "Export failed", body: e instanceof ApiError ? e.message : undefined });
@@ -54,7 +58,7 @@ export default function ReportDetailPage() {
   };
   const runVerify = async () => {
     setVerifying(true);
-    try { setVerify(await api<VerifyResult>(`/compliance/reports/${r.id}/verify`)); } finally { setVerifying(false); }
+    try { const result = await api<VerifyResult>(`/compliance/reports/${r.id}/verify`); setVerify(result); analytics.track(GOVERNANCE_EVENTS.AUDIT_CHAIN_VERIFIED, { verification_result: result.reproducible ? "verified" : "failed" }); } finally { setVerifying(false); }
   };
 
   return (

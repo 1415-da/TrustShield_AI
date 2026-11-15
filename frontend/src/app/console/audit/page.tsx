@@ -14,6 +14,8 @@ import { useApi } from "@/hooks/useApi";
 import { api } from "@/lib/api";
 import { dateTime, ROLE_LABELS } from "@/lib/format";
 import type { AuditEvent, RuleMatch } from "@/lib/types";
+import { useAnalytics } from "@/lib/analytics";
+import { GOVERNANCE_EVENTS } from "@/lib/analytics/events";
 
 interface Page { items: AuditEvent[]; total: number; page: number; page_size: number }
 interface Detail { event: AuditEvent; guardrail_decisions: { stage: string; action: string; risk_score: number; matches: RuleMatch[]; redaction_count: number; latency_ms: number }[] }
@@ -21,6 +23,7 @@ interface Detail { event: AuditEvent; guardrail_decisions: { stage: string; acti
 const TYPES = [["", "All events"], ["assistant", "Assistant requests"], ["review", "Review actions"], ["policy", "Policy changes"], ["auth", "Sign-ins"], ["document", "Documents"], ["simulation", "Simulations"], ["test_run", "Test runs"], ["api_key", "API keys"]];
 
 export default function AuditPage() {
+  const analytics = useAnalytics();
   const [page, setPage] = useState(1);
   const [type, setType] = useState("");
   const [action, setAction] = useState("");
@@ -47,7 +50,7 @@ export default function AuditPage() {
                 {chain.valid ? `Chain intact · ${chain.checked} events` : `Broken at #${chain.broken_at_event_id}`}
               </Badge>
             )}
-            <Button variant="secondary" onClick={async () => setChain(await api("/admin/audit-events/verify"))}><Link2 className="h-4 w-4" />Verify chain</Button>
+            <Button variant="secondary" onClick={async () => { const result = await api<{valid: boolean}>("/admin/audit-events/verify"); setChain(result as typeof chain); analytics.track(GOVERNANCE_EVENTS.AUDIT_CHAIN_VERIFIED, { verification_result: result.valid ? "verified" : "failed" }); }}><Link2 className="h-4 w-4" />Verify chain</Button>
           </div>
         }
       />

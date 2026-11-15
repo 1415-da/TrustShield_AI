@@ -11,6 +11,7 @@ import { ApiError, api } from "@/lib/api";
 import { ENTITY_LABELS, humanize } from "@/lib/format";
 import type { PlaygroundResult, PlaygroundStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ANALYTICS_EVENTS, useAnalytics } from "@/lib/analytics";
 
 const ROLES = [
   { key: "employee", label: "Employee", hint: "No special data scopes" },
@@ -82,6 +83,7 @@ function Pipeline({ result }: { result: PlaygroundResult }) {
 }
 
 export function Playground() {
+  const analytics = useAnalytics();
   const [role, setRole] = useState<string>("employee");
   const [prompt, setPrompt] = useState(EXAMPLES[1].prompt);
   const [result, setResult] = useState<PlaygroundResult | null>(null);
@@ -97,8 +99,11 @@ export function Playground() {
     setBusy(true);
     setError(null);
     try {
-      setResult(await api<PlaygroundResult>("/public/playground", { method: "POST", body: { prompt: p, role: r }, auth: false }));
+      const response = await api<PlaygroundResult>("/public/playground", { method: "POST", body: { prompt: p, role: r }, auth: false });
+      analytics.track(ANALYTICS_EVENTS.DEMO_PLAYGROUND_RUN, { ...response.analytics, surface: "demo_playground", success: true });
+      setResult(response);
     } catch (err) {
+      analytics.track(ANALYTICS_EVENTS.DEMO_PLAYGROUND_RUN, { surface: "demo_playground", success: false, error_code: err instanceof ApiError ? err.code.toUpperCase() : "UNKNOWN" });
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {
       setBusy(false);

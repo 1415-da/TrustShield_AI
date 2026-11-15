@@ -17,6 +17,8 @@ import { useApi } from "@/hooks/useApi";
 import { api, ApiError } from "@/lib/api";
 import { dateTime, humanize, money, ROLE_LABELS } from "@/lib/format";
 import type { ActionAuditItem, AgentActionItem } from "@/lib/types";
+import { useAnalytics } from "@/lib/analytics";
+import { AGENT_EVENTS } from "@/lib/analytics/events";
 
 type Verb = "approve" | "reject" | "request-info" | "escalate" | "execute" | "compensate";
 const COPY: Record<Verb, { title: string; desc: string; label: string; danger?: boolean; noteRequired?: boolean }> = {
@@ -29,6 +31,7 @@ const COPY: Record<Verb, { title: string; desc: string; label: string; danger?: 
 };
 
 export default function ActionDetailPage() {
+  const analytics = useAnalytics();
   const { id } = useParams<{ id: string }>();
   const { can, user } = useAuth();
   const toast = useToast();
@@ -47,6 +50,9 @@ export default function ActionDetailPage() {
     if (!verb) return;
     try {
       await api(`/agent/actions/${a.id}/${verb}`, { method: "POST", body: verb === "execute" ? undefined : { note } });
+      if (verb === "approve") analytics.track(AGENT_EVENTS.AGENT_ACTION_APPROVED, { action_type: a.action_type, approval_role: user?.primary_role, agent_decision: "approved" });
+      if (verb === "reject") analytics.track(AGENT_EVENTS.AGENT_ACTION_REJECTED, { action_type: a.action_type, approval_role: user?.primary_role, agent_decision: "rejected" });
+      if (verb === "execute" || verb === "compensate") analytics.track(AGENT_EVENTS.AGENT_ACTION_EXECUTED, { action_type: a.action_type, agent_decision: "executed" });
       toast({ tone: "success", title: { approve: "Approved and executed", reject: "Action rejected", "request-info": "Information requested", escalate: "Escalated to Security", execute: "Action run", compensate: "Action reversed" }[verb] });
       await action.reload();
       void trail.reload();

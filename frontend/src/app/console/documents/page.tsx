@@ -15,8 +15,11 @@ import { useConfirm } from "@/components/ui/confirm";
 import { api, ApiError } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { DocumentDetail, DocumentItem } from "@/lib/types";
+import { useAnalytics } from "@/lib/analytics";
+import { GOVERNANCE_EVENTS } from "@/lib/analytics/events";
 
 export default function DocumentsPage() {
+  const analytics = useAnalytics();
   const { can } = useAuth();
   const writable = can("documents:write");
   const docs = useApi<DocumentItem[]>("/admin/documents");
@@ -43,6 +46,8 @@ export default function DocumentsPage() {
     form.append("trust_level", trust);
     try {
       await api("/admin/documents", { method: "POST", form });
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      analytics.track(GOVERNANCE_EVENTS.DOCUMENT_UPLOADED, { document_type: ext === "pdf" || ext === "docx" || ext === "txt" || ext === "csv" ? ext : "other", success: true });
       setTitle("");
       if (fileRef.current) fileRef.current.value = "";
       await docs.reload();

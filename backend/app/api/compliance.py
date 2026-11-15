@@ -93,7 +93,7 @@ def schedule(report_id: int, body: ScheduleRequest, user: User = Depends(can_wri
     return evidence.create_schedule(db, _ready(evidence.get_report(db, report_id)), user, body.cadence, body.retention_days)
 
 
-@router.delete("/reports/{report_id}", status_code=204)
+@router.delete("/reports/{report_id}", status_code=204, response_model=None)
 def withdraw(report_id: int, user: User = Depends(can_write), db: Session = Depends(get_db)) -> None:
     r = evidence.get_report(db, report_id)
     if r.status == "GENERATING":
@@ -117,7 +117,7 @@ def list_schedules(_: User = Depends(can_read), db: Session = Depends(get_db)) -
     return list(db.scalars(select(ReportSchedule).order_by(ReportSchedule.id.desc())))
 
 
-@router.delete("/schedules/{schedule_id}", status_code=204)
+@router.delete("/schedules/{schedule_id}", status_code=204, response_model=None)
 def cancel_schedule(schedule_id: int, user: User = Depends(can_write), db: Session = Depends(get_db)) -> None:
     s = db.get(ReportSchedule, schedule_id)
     if s is None:

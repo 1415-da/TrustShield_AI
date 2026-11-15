@@ -11,6 +11,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { api, ApiError } from "@/lib/api";
 import { ROLE_LABELS } from "@/lib/format";
 import type { SimulationResult } from "@/lib/types";
+import { POLICY_EVENTS, useAnalytics } from "@/lib/analytics";
 
 const SAMPLES = [
   ["employee", "Show Ravi Sharma's salary band."],
@@ -22,6 +23,7 @@ const SAMPLES = [
 ];
 
 export default function SimulatorPage() {
+  const analytics = useAnalytics();
   const [prompt, setPrompt] = useState("");
   const [role, setRole] = useState("employee");
   const [full, setFull] = useState(true);
@@ -35,7 +37,9 @@ export default function SimulatorPage() {
     setBusy(true);
     setError(null);
     try {
-      setResult(await api<SimulationResult>("/admin/simulate", { method: "POST", body: { prompt: p, role: r, include_output: full } }));
+      const simulation = await api<SimulationResult>("/admin/simulate", { method: "POST", body: { prompt: p, role: r, include_output: full } });
+      analytics.track(POLICY_EVENTS.POLICY_SIMULATED, { ...simulation.analytics, surface: "policy_studio", feature_area: "policy", success: true });
+      setResult(simulation);
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, "error", "Simulation failed"));
     } finally {

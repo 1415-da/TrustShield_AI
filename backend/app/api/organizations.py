@@ -21,6 +21,7 @@ from app.models.base import utcnow
 from app.models.organization import DEFAULT_ORG_ID
 from app.schemas.auth import LoginResponse, UserOut
 from app.services import audit, organizations, simulation
+from app.services.analytics_events import analytics_metadata
 
 router = APIRouter(tags=["organizations"])
 
@@ -121,6 +122,7 @@ def playground(body: PlaygroundRequest, request: Request, db: Session = Depends(
     t0 = time.perf_counter()
     r = simulation.simulate(db, prompt=body.prompt, role=body.role)
     final = r["final"]
+    latency_ms = round((time.perf_counter() - t0) * 1000, 1)
     audit.record(db, "playground.scan", actor_role=body.role, content_hash=sha256_hex(body.prompt),
                  input_action=final["input_action"], output_action=final["output_action"],
                  details={"trust_status": final["trust_status"], "llm_called": final["llm_called"]}, commit=True)
@@ -136,7 +138,18 @@ def playground(body: PlaygroundRequest, request: Request, db: Session = Depends(
         "citations": [{"title": c.get("title"), "heading": c.get("heading"), "snippet": c.get("snippet")}
                       for c in final.get("citations") or []],
         "stages": [s for s in (_public_stage(r["input"]), _public_stage(r["context"]), _public_stage(r["output"])) if s],
-        "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+        "latency_ms": latency_ms,
+        "analytics": analytics_metadata(
+            workspace_id=DEFAULT_ORG_ID, user_role=body.role, surface="demo_playground",
+            simulation_role=body.role,
+            input_action=final["input_action"], trust_status=final["trust_status"],
+            input_risk_score=r["input"].get("risk_score"),
+            output_risk_score=r["output"].get("risk_score") if r.get("output") else None,
+            confidence=(final.get("explanation") or {}).get("confidence"),
+            citation_count=len(final.get("citations") or []), model_called=final["llm_called"],
+            latency_ms=latency_ms,
+            matches=[match for stage in (r.get("input"), r.get("context"), r.get("output")) if stage for match in stage.get("matches", [])],
+        ),
     }
 
 

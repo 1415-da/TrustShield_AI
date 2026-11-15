@@ -11,11 +11,13 @@ import { ErrorState } from "@/components/ui/states";
 import { api, ApiError } from "@/lib/api";
 import { PROFILE_LABELS, ROLE_LABELS } from "@/lib/format";
 import type { PolicyDefinition, SimulationResult } from "@/lib/types";
+import { POLICY_EVENTS, useAnalytics } from "@/lib/analytics";
 
 /** "Test this version": a saved version (policyId + versionId) or an unsaved definition (draft). */
 export function VersionSimulator({ policyId, versionId, versionLabel, draft }: {
   policyId?: number; versionId?: number; versionLabel?: string; draft?: PolicyDefinition;
 }) {
+  const analytics = useAnalytics();
   const [prompt, setPrompt] = useState("");
   const [role, setRole] = useState("employee");
   const [profile, setProfile] = useState("");
@@ -27,9 +29,11 @@ export function VersionSimulator({ policyId, versionId, versionLabel, draft }: {
     setError(null);
     try {
       const body = { prompt, role, profile: profile || null };
-      setResult(policyId
+      const simulation = policyId
         ? await api<SimulationResult>(`/admin/policies/${policyId}/simulate`, { method: "POST", body: { ...body, version_id: versionId } })
-        : await api<SimulationResult>("/admin/simulate", { method: "POST", body: { ...body, draft_policy: draft } }));
+        : await api<SimulationResult>("/admin/simulate", { method: "POST", body: { ...body, draft_policy: draft } });
+      analytics.track(POLICY_EVENTS.POLICY_SIMULATED, { ...simulation.analytics, surface: "policy_studio", feature_area: "policy", success: true });
+      setResult(simulation);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Simulation failed");
     } finally {

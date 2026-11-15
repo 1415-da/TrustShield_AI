@@ -7,6 +7,7 @@ import { ActionCard } from "@/components/assistant/action-card";
 import { TrustBadge } from "@/components/trust/badges";
 import { ENTITY_LABELS, timeAgo } from "@/lib/format";
 import type { ChatMessage, Citation, Explanation } from "@/lib/types";
+import { ASSISTANT_EVENTS, useAnalytics } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 /** Renders assistant text: paragraphs, "- " bullets, [n] citation markers and <MASKED> tokens. */
@@ -48,6 +49,7 @@ function inline(s: string | null | undefined) {
 
 function Sources({ citations }: { citations: Citation[] | null | undefined }) {
   const [open, setOpen] = useState<number | null>(null);
+  const analytics = useAnalytics();
   if (!citations?.length) return null;
   return (
     <div className="mt-3">
@@ -56,7 +58,11 @@ function Sources({ citations }: { citations: Citation[] | null | undefined }) {
         {citations.map((c) => (
           <button
             key={`${c.index}-${c.chunk_id}`}
-            onClick={() => setOpen(open === c.index ? null : c.index)}
+            onClick={() => {
+              const next = open === c.index ? null : c.index;
+              setOpen(next);
+              if (next !== null) analytics.track(ASSISTANT_EVENTS.SOURCE_CITATION_OPENED, { surface: "web_assistant", feature_area: "assistant", citation_count: citations.length });
+            }}
             aria-expanded={open === c.index}
             className={cn("rounded-full border px-2.5 py-1 text-[12px] transition", open === c.index ? "border-forest bg-forest text-cream" : "border-hair bg-white/60 text-ink-700 hover:border-forest/40")}
           >

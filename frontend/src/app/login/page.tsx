@@ -16,6 +16,7 @@ import { ApiError } from "@/lib/api";
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-accounts";
 import { ROLE_LABELS } from "@/lib/roles";
 import type { User } from "@/lib/types";
+import { ANALYTICS_EVENTS, trackEvent } from "@/lib/analytics";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/;
 
@@ -59,12 +60,19 @@ function LoginForm() {
     setFieldErrors(errs);
     setError(null);
     if (errs.email || errs.password) return;
+    trackEvent(ANALYTICS_EVENTS.LOGIN_STARTED, { success: true, surface: "auth" });
     setBusy(true);
     try {
       const u = await login(email, password);
       hardNavigate(destination(u, next)); // stays busy ("Signing in…") until the next page loads
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : null;
+      const errorCode = apiErr?.code.toUpperCase();
+      trackEvent(ANALYTICS_EVENTS.LOGIN_FAILED, {
+        success: false,
+        surface: "auth",
+        error_code: errorCode === "INVALID_CREDENTIALS" || errorCode === "RATE_LIMITED" || errorCode === "NETWORK_ERROR" ? errorCode : "UNKNOWN",
+      });
       setError(apiErr?.message ?? "Sign-in failed. Please try again.");
       if (apiErr?.code === "INVALID_CREDENTIALS") {
         setPassword("");

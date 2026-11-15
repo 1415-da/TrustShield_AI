@@ -12,6 +12,7 @@ from app.core.errors import NotFound
 from app.models import ConnectedApp, Conversation, Message, User
 from app.schemas.assistant import ChatRequest, ChatResponse, ConversationDetail, ConversationSummary, MessageOut
 from app.services import gateway
+from app.services.analytics_events import analytics_metadata
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 use_assistant = require_permission("assistant:use")
@@ -33,6 +34,15 @@ def chat(body: ChatRequest, user: User = Depends(use_assistant), app: ConnectedA
         "decision": {"request_id": r.request_id, "input_action": r.input_action.value,
                      "output_action": r.output_action.value if r.output_action else None, "trust_status": r.trust_status,
                      "llm_called": r.llm_called, "review_case_id": r.review_case_id, "latency_ms": r.latency_ms},
+        "analytics": analytics_metadata(
+            workspace_id=user.organization_id, user_role=user.primary_role, surface="web_assistant",
+            input_action=r.input_action.value, trust_status=r.trust_status,
+            input_risk_score=r.input_stage.risk_score,
+            output_risk_score=r.output_stage.risk_score if r.output_stage else None,
+            confidence=r.grounding.confidence if r.grounding else None,
+            citation_count=len(r.citations), model_called=r.llm_called, latency_ms=r.latency_ms,
+            matches=r.all_matches,
+        ),
     }
 
 

@@ -9,7 +9,8 @@ FROM node:20-alpine AS build
 WORKDIR /app
 # /api/* rewrites are compiled into the build, so the gateway address is a build argument.
 ARG BACKEND_URL=http://backend:8000
-ENV BACKEND_URL=$BACKEND_URL NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_MIXPANEL_TOKEN
+ENV BACKEND_URL=$BACKEND_URL NEXT_PUBLIC_MIXPANEL_TOKEN=$NEXT_PUBLIC_MIXPANEL_TOKEN NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

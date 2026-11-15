@@ -51,7 +51,7 @@ def get_document(document_id: int, _: User = Depends(can_read), db: Session = De
     return doc
 
 
-@router.delete("/{document_id}", status_code=204)
+@router.delete("/{document_id}", status_code=204, response_model=None)
 def delete_document(document_id: int, user: User = Depends(can_write), db: Session = Depends(get_db)) -> None:
     doc = db.get(Document, document_id)
     if doc is None:

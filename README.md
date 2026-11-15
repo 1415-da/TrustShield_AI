@@ -29,6 +29,8 @@ Every request gets exactly one decision: **ALLOW · REDACT · BLOCK · REVIEW ·
 
 ## Quick start (Docker)
 
+Mixpanel setup is optional. See [Mixpanel analytics](docs/MIXPANEL_ANALYTICS.md) for the event catalog, privacy rules, and dashboard reports.
+
 ```bash
 cp .env.example .env          # optional; defaults run fully offline with the built-in model
 docker compose up --build
@@ -58,6 +60,12 @@ To finish connecting the production site after the Render Blueprint is deployed:
 4. Check `https://<backend-host>/api/health` and `https://<backend-host>/api/docs`, then sign in at the Vercel site. The public demo accounts use the password configured by `DEMO_USER_PASSWORD` in Render.
 
 For local Compose deployments, the API is published to loopback by default. Set `BACKEND_BIND_ADDRESS=0.0.0.0` only when another host must reach the API, and put it behind HTTPS with firewall rules. Leave PostgreSQL on its private Compose network; do not publish port 5432 to the public internet. The `BACKEND_PORT` and `DB_PORT` variables only change host-side ports. See the [Render Docker service docs](https://render.com/docs/docker) and [Render Postgres private networking docs](https://render.com/docs/postgresql-creating-connecting).
+
+### Mixpanel analytics
+
+Set `NEXT_PUBLIC_MIXPANEL_TOKEN` in `frontend/.env.local` for local Next.js runs. Docker Compose reads build arguments from the root `.env` file, so add the same variable there before rebuilding with `docker compose up --build`. For Vercel, add it to the project's Production and Preview environment variables, then redeploy because Next.js embeds public environment variables at build time. The token is a public project ingest token; never place private API secrets in a `NEXT_PUBLIC_` variable.
+
+The browser tracks acquisition, authentication, assistant/workspace outcomes, policy and review workflows, agent actions, evidence, audit verification, and document uploads. A strict allowlist removes arbitrary properties; prompts, answers, emails, identifiers, notes, and policy/document content are excluded. Start with the 12 suggested reports in [MIXPANEL_ANALYTICS.md](docs/MIXPANEL_ANALYTICS.md), then use the [verification checklist](docs/MIXPANEL_VERIFICATION.md) to confirm ingestion and inspect payloads in Mixpanel Live View. The [full analytics specification](docs/ANALYTICS.md) describes funnels, retention, properties, and debugging.
 
 **Port already in use?** If another project or a local Postgres holds 3000, 8000 or 55432, TrustShield's containers start but you reach *the other service* on that port. For example, `localhost:8000` returns `{"detail":"Not Found"}` from someone else's API. Run `scripts/check_ports.sh` to see who owns each port, then set free ports in `.env`:
 
@@ -249,7 +257,7 @@ These numbers come from a labelled suite written together with the guardrails. T
 backend/   FastAPI app (core, api, models, schemas, services, guardrails, workers, seed, tests), Alembic
 frontend/  Next.js 14 App Router + Tailwind (shadcn-style components), Recharts, Playwright tests
 scripts/   seed_demo_data.py · run_tests.sh · generate_test_report.py
-docs/      PRODUCT_ONE_PAGER · PRD · ARCHITECTURE · API · TEST_PLAN · DEMO_SCRIPT
+docs/      PRODUCT_ONE_PAGER · PRD · ARCHITECTURE · API · TEST_PLAN · DEMO_SCRIPT · ANALYTICS
 ```
 
 ---

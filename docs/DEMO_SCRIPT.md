@@ -46,6 +46,17 @@
 
 ### If you have more time
 
+### Mixpanel analytics walkthrough
+
+1. Open the connected Mixpanel project and show Live View.
+2. Perform a synthetic assistant request in TrustShield and show the corresponding assistant events arriving.
+3. Show the Workspace Activation Funnel and Feature Adoption by Role reports.
+4. Show Guardrail Decision Mix, Policy Governance Funnel, and Human Review Workflow.
+5. Show Evidence Report Usage and the retention reports.
+6. Inspect an event payload and point out that it contains categorical metadata only, with no prompt or answer text.
+
+The project token must be configured for the frontend build, and Mixpanel reports must be created in the account first. See [MIXPANEL_ANALYTICS.md](MIXPANEL_ANALYTICS.md).
+
 - **Rollback:** Policy Studio → *Grounding Confidence* → History → *Roll back to v1* (creates v3 from the approved v1; nothing is rewritten).
 - **Exceptions:** Console → Exceptions — the Legal-department exemption is active, the HR coordinator's has expired, a Finance request was rejected.
 - **Slack:** Console → *Slack & workspace* shows connection status, channel ↔ policy-profile mapping, delivery log with retry. With `SLACK_ENABLED=true` and real credentials the same pipeline answers in Slack threads.

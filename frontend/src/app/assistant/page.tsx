@@ -17,6 +17,7 @@ import { useApi } from "@/hooks/useApi";
 import { api, ApiError } from "@/lib/api";
 import { readableMasks, ROLE_LABELS, timeAgo } from "@/lib/format";
 import type { AgentActionItem, ChatMessage, ChatResponse, ConversationDetail, ConversationSummary } from "@/lib/types";
+import { AGENT_EVENTS, ASSISTANT_EVENTS, useAnalytics } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 const SUGGESTIONS = [
@@ -35,6 +36,7 @@ function greeting(): string {
 
 export default function AssistantPage() {
   const { user, loading, can } = useAuth();
+  const analytics = useAnalytics();
   const orgName = user?.organization?.name ?? "Your organization";
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -87,6 +89,10 @@ export default function AssistantPage() {
       if (mode === "action") {
         const action = await api<AgentActionItem>("/agent/actions", { method: "POST", body: {
           request: prompt, conversation_id: activeId, record_in_conversation: true, idempotency_key: crypto.randomUUID?.() } });
+        const actionType = action.action_type ?? undefined;
+        const decision = action.status === "BLOCKED" ? "block" : action.status === "PENDING_APPROVAL" || action.status === "IN_REVIEW" ? "review" : "allow";
+        analytics.track(AGENT_EVENTS.AGENT_ACTION_REQUESTED, { surface: "web_assistant", feature_area: "agent", success: true, ...(actionType ? { action_type: actionType } : {}), agent_decision: decision });
+        if (action.status === "BLOCKED") analytics.track(AGENT_EVENTS.AGENT_ACTION_BLOCKED, { surface: "web_assistant", feature_area: "agent", ...(actionType ? { action_type: actionType } : {}), agent_decision: "block" });
         const conv = await api<ConversationDetail>(`/assistant/conversations/${action.conversation_id}`);
         setMessages(conv.messages);
         if (action.conversation_id !== activeId) setActiveId(action.conversation_id);
@@ -94,6 +100,19 @@ export default function AssistantPage() {
         return;
       }
       const res = await api<ChatResponse>("/assistant/chat", { method: "POST", body: { message: prompt, conversation_id: activeId } });
+      const metadata = res.analytics ? { ...res.analytics } : {};
+      analytics.track(ASSISTANT_EVENTS.ASSISTANT_QUESTION_SUBMITTED, { ...metadata, surface: "web_assistant", feature_area: "assistant" });
+      if (res.decision.output_action === "SHOW_WITH_WARNING") {
+        analytics.track(ASSISTANT_EVENTS.ASSISTANT_RESPONSE_WARNED, metadata);
+      } else if (metadata.decision === "redact") {
+        analytics.track(ASSISTANT_EVENTS.ASSISTANT_RESPONSE_REDACTED, metadata);
+      } else if (metadata.decision === "review") {
+        analytics.track(ASSISTANT_EVENTS.ASSISTANT_RESPONSE_REVIEWED, metadata);
+      } else if (metadata.decision === "block" || metadata.decision === "escalate") {
+        analytics.track(ASSISTANT_EVENTS.ASSISTANT_RESPONSE_BLOCKED, metadata);
+      } else {
+        analytics.track(ASSISTANT_EVENTS.ASSISTANT_RESPONSE_SHOWN, metadata);
+      }
       setMessages((m) => [...m.filter((x) => x.id !== optimistic.id), res.user_message, res.message]);
       if (res.conversation_id !== activeId) setActiveId(res.conversation_id);
       void convs.reload();
@@ -104,7 +123,7 @@ export default function AssistantPage() {
     } finally {
       setSending(false);
     }
-  }, [draft, activeId, convs, mode]);
+  }, [draft, activeId, convs, mode, analytics]);
 
   const openConversation = (id: number | null) => {
     setActiveId(id);

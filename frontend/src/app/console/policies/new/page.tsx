@@ -15,8 +15,10 @@ import { useToast } from "@/components/ui/toast";
 import { useApi } from "@/hooks/useApi";
 import { api, ApiError } from "@/lib/api";
 import type { Catalogue, PolicyDefinition, PolicyDetail } from "@/lib/types";
+import { POLICY_EVENTS, useAnalytics } from "@/lib/analytics";
 
 export default function NewPolicyPage() {
+  const analytics = useAnalytics();
   const router = useRouter();
   const toast = useToast();
   const catalogue = useApi<Catalogue>("/admin/policies/catalogue");
@@ -31,6 +33,7 @@ export default function NewPolicyPage() {
     setError(null);
     try {
       const created = await api<PolicyDetail>("/admin/policies", { method: "POST", body: { ...cleanDefinition(draft), change_summary: summary } });
+      analytics.track(POLICY_EVENTS.POLICY_CREATED, { surface: "policy_studio", feature_area: "policy", success: true });
       toast({ tone: "success", title: "Draft saved", body: "It has no effect on live traffic until it is approved and activated." });
       router.replace(`/console/policies/${created.id}`);
     } catch (err) {

@@ -9,6 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { fetchMe, signIn, signOut, signUp, type SignupBody } from "@/lib/auth/auth-client";
 import { broadcast, hardNavigate, markSigningOut, onAuthMessage } from "@/lib/auth/session";
 import type { User } from "@/lib/types";
+import { AnalyticsBridge, ANALYTICS_EVENTS, identifyUser, resetAnalytics, trackEvent } from "@/lib/analytics";
 
 interface AuthState {
   user: User | null;
@@ -60,6 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const u = await signIn(email, password);
+    const workspaceId = u.organization?.id ? `ws_${u.organization.id}` : undefined;
+    if (workspaceId) identifyUser({ workspaceId, roles: u.role_keys, userRole: u.primary_role });
+    trackEvent(ANALYTICS_EVENTS.LOGIN_COMPLETED, { ...(workspaceId ? { workspace_id: workspaceId } : {}), user_role: u.primary_role, success: true, surface: "auth" });
     setUser(u);
     broadcast({ type: "login", userId: u.id });
     return u;
@@ -67,6 +71,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = useCallback(async (body: SignupBody) => {
     const u = await signUp(body);
+    const workspaceId = u.organization?.id ? `ws_${u.organization.id}` : undefined;
+    const industry = body.industry?.toLowerCase() ?? "";
+    const industry_bucket = industry.includes("financ") ? "finance"
+      : industry.includes("health") ? "healthcare"
+      : industry.includes("tech") ? "technology"
+      : industry.includes("manufact") ? "manufacturing"
+      : industry.includes("retail") ? "retail"
+      : industry.includes("logistic") ? "logistics"
+      : industry.includes("public") ? "public_sector"
+      : industry.includes("professional") ? "professional_services"
+      : industry ? "other" : undefined;
+    const size = body.size?.replaceAll(",", "").replaceAll("–", "-") ?? "";
+    const company_size_bucket = size.startsWith("1-200") ? "1_200"
+      : size.startsWith("200-1,000") || size.startsWith("200-1000") ? "201_1000"
+      : size.startsWith("1,000-5,000") || size.startsWith("1000-5000") ? "1001_5000"
+      : size.includes("5,000+") || size.includes("5000+") ? "5001_plus"
+      : size ? "other" : undefined;
+    if (workspaceId) identifyUser({ workspaceId, roles: u.role_keys, userRole: u.primary_role });
+    trackEvent(ANALYTICS_EVENTS.SIGNUP_COMPLETED, { ...(workspaceId ? { workspace_id: workspaceId } : {}), user_role: u.primary_role, success: true, surface: "auth" });
+    trackEvent(ANALYTICS_EVENTS.WORKSPACE_CREATED, { ...(workspaceId ? { workspace_id: workspaceId } : {}), user_role: u.primary_role, success: true, surface: "auth", ...(industry_bucket ? { industry_bucket } : {}), ...(company_size_bucket ? { company_size_bucket } : {}) });
     setUser(u);
     broadcast({ type: "login", userId: u.id });
     return u;
@@ -79,17 +103,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     markSigningOut();
     await signOut();
+    trackEvent(ANALYTICS_EVENTS.LOGOUT_COMPLETED, { ...(user?.organization?.id ? { workspace_id: `ws_${user.organization.id}` } : {}), ...(user?.primary_role ? { user_role: user.primary_role } : {}), success: true, surface: "auth" });
+    resetAnalytics();
     // No setUser(null) here: the full navigation below discards all in-memory state, and clearing the user first would
     // let page guards race us with a "/login?next=…" redirect.
     broadcast({ type: "logout" });
     hardNavigate("/login"); // full navigation: no in-memory user, workspace, sidebar or cached data survives
-  }, []);
+  }, [user]);
 
   const value = useMemo<AuthState>(
     () => ({ user, loading, login, signup, refresh, logout, can: (p: string) => !!user?.permissions.includes(p) }),
     [user, loading, login, signup, refresh, logout],
   );
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}><AnalyticsBridge />{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {

@@ -17,6 +17,7 @@ import { api, ApiError } from "@/lib/api";
 import { ENTITY_LABELS, timeAgo } from "@/lib/format";
 import type { WorkspaceChannel, WorkspaceItem, WorkspaceReply } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAnalytics, WORKSPACE_EVENTS } from "@/lib/analytics";
 
 function initials(name: string) {
   return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -92,6 +93,7 @@ function Item({ item }: { item: WorkspaceItem }) {
 
 export default function WorkspacePage() {
   const { user, loading } = useAuth();
+  const analytics = useAnalytics();
   const channels = useApi<WorkspaceChannel[]>(user ? "/workspace/channels" : null);
   const [active, setActive] = useState<WorkspaceChannel | null>(null);
   const [items, setItems] = useState<WorkspaceItem[]>([]);
@@ -124,6 +126,11 @@ export default function WorkspacePage() {
     const body = { text: text.trim(), client_msg_id: crypto.randomUUID?.() ?? String(Date.now()) };
     try {
       const item = await api<WorkspaceItem>(`/workspace/channels/${active.id}/messages`, { method: "POST", body });
+      const channel = ["finance", "people", "it", "legal", "general"].find((name) => active.name.toLowerCase().includes(name)) ?? "other";
+      const metadata = { ...item.analytics, surface: "connected_workspace", channel };
+      analytics.track(WORKSPACE_EVENTS.WORKSPACE_MESSAGE_SENT, metadata);
+      if (metadata.decision === "block" || metadata.decision === "escalate") analytics.track(WORKSPACE_EVENTS.WORKSPACE_MESSAGE_BLOCKED, metadata);
+      if (metadata.decision === "review") analytics.track(WORKSPACE_EVENTS.WORKSPACE_MESSAGE_REVIEWED, metadata);
       setItems((xs) => [...xs.filter((x) => x.event_id !== item.event_id), item]);
       setText("");
     } catch (e) {

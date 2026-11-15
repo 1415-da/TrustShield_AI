@@ -147,7 +147,7 @@ def create_key(app_id: int, body: ApiKeyCreate, admin: User = Depends(can_apps),
     return {**ApiKeyOut.model_validate(key).model_dump(), "key": raw}
 
 
-@router.post("/apps/{app_id}/keys/{key_id}/revoke", status_code=204)
+@router.post("/apps/{app_id}/keys/{key_id}/revoke", status_code=204, response_model=None)
 def revoke_key(app_id: int, key_id: int, admin: User = Depends(can_apps), db: Session = Depends(get_db)) -> None:
     key = db.get(ApiKey, key_id)
     if key is None or key.app_id != app_id:
