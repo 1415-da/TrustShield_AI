@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: trustshield-api
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trustshield-postgres
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: CORS_ORIGINS
+        value: https://trustshield-ai-five.vercel.app
+      - key: PUBLIC_APP_URL
+        value: https://trustshield-ai-five.vercel.app
+      - key: DEMO_USER_PASSWORD
+        value: TrustShield-demo-2024
+      - key: SEED_ON_START
+        value: "true"
+      - key: SCHEDULER_ENABLED
+        value: "true"
+
+databases:
+  - name: trustshield-postgres
+    databaseName: trustshield
+    user: trustshield
+    plan: 0.5c-1g
+    region: singapore
+    ipAllowList: []

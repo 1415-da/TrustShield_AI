@@ -40,7 +40,24 @@ docker compose up --build
 | API + Swagger docs | http://localhost:8000/api/docs | `BACKEND_PORT` |
 | PostgreSQL 15 (localhost only) | `postgresql://trustshield:trustshield@localhost:55432/trustshield` | `DB_PORT` |
 
+The API connects to PostgreSQL over Docker's private network at `db:5432`. From the host machine, connect with `psql -h localhost -p 55432 -U trustshield -d trustshield`. PostgreSQL binds to `127.0.0.1` by default; keep it private and use a managed/private database for a remotely hosted backend.
+
 On first start the backend runs Alembic migrations and seeds the demo tenant. Seeding replays about 14 days of traffic through the real gateway and runs the evaluation suite once.
+
+## Deployment
+
+The Next.js frontend is deployed on Vercel: **[trustshield-ai-five.vercel.app](https://trustshield-ai-five.vercel.app)**. The FastAPI gateway needs a persistent container host and PostgreSQL; Vercel does not run this repository's Docker Compose stack.
+
+[`render.yaml`](render.yaml) defines a Render deployment for the FastAPI container and a private PostgreSQL database in Singapore. It uses the existing `backend/Dockerfile`, runs migrations and demo seeding on startup, generates a JWT secret, and exposes `/api/health` as the service health check. The database accepts private-network connections only. Render requires access to this repository before it can build the Blueprint; review the selected service and database plans in Render before provisioning them.
+
+To finish connecting the production site after the Render Blueprint is deployed:
+
+1. Copy the backend's public HTTPS origin from Render (for example, `https://trustshield-api.onrender.com`). The private PostgreSQL URL is supplied to the backend automatically by the Blueprint.
+2. In Vercel, open the `trustshield-ai` project's **Settings → Environment Variables** and set `BACKEND_URL` to that origin for Production. This URL is used at build time for the Next.js `/api/*` proxy.
+3. Redeploy the Vercel frontend with `vercel --cwd frontend --prod`.
+4. Check `https://<backend-host>/api/health` and `https://<backend-host>/api/docs`, then sign in at the Vercel site. The public demo accounts use the password configured by `DEMO_USER_PASSWORD` in Render.
+
+For local Compose deployments, the API is published to loopback by default. Set `BACKEND_BIND_ADDRESS=0.0.0.0` only when another host must reach the API, and put it behind HTTPS with firewall rules. Leave PostgreSQL on its private Compose network; do not publish port 5432 to the public internet. The `BACKEND_PORT` and `DB_PORT` variables only change host-side ports. See the [Render Docker service docs](https://render.com/docs/docker) and [Render Postgres private networking docs](https://render.com/docs/postgresql-creating-connecting).
 
 **Port already in use?** If another project or a local Postgres holds 3000, 8000 or 55432, TrustShield's containers start but you reach *the other service* on that port. For example, `localhost:8000` returns `{"detail":"Not Found"}` from someone else's API. Run `scripts/check_ports.sh` to see who owns each port, then set free ports in `.env`:
 
