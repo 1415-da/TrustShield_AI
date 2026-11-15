@@ -230,3 +230,5 @@ backend/.venv/
 backend/data/
 reports/*.json
 *.db
+.vercel
+.env*
